@@ -1,0 +1,38 @@
+name: Lumoria
+options:
+  bundleIdPrefix: com.elmaedesistemas
+  deploymentTarget:
+    iOS: "18.0"
+
+packages:
+  Supabase:
+    url: https://github.com/supabase/supabase-swift
+    from: 2.0.0
+
+targets:
+  Lumoria:
+    type: application
+    platform: iOS
+    sources:
+      - path: Lumoria
+      - path: Data/sites.json
+        buildPhase: resources
+    configFiles:
+      Debug: Lumoria/Config/App.xcconfig
+      Release: Lumoria/Config/App.xcconfig
+    info:
+      path: Lumoria/Info.plist
+      properties:
+        CFBundleDisplayName: Lumoria
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        SUPABASE_HOST: $(SUPABASE_HOST)
+        SUPABASE_ANON_KEY: $(SUPABASE_ANON_KEY)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.elmaedesistemas.lumoria
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies:
+      - package: Supabase

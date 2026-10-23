@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "body": "moon",
+  "coordinateSource": "LROC, coordinates of human artifacts on the Moon (2016). Selenographic latitude and longitude of each lunar module; longitude is east-positive (-180 to 180).",
+  "sites": [
+    {
+      "id": "apollo-11",
+      "mission": "Apollo 11",
+      "order": 1,
+      "label": "SITE 01 · 1969",
+      "lander": "Eagle",
+      "region": { "en": "Sea of Tranquility", "es": "Mar de la Tranquilidad" },
+      "landedAt": "1969-07-20T20:17:40Z",
+      "crew": { "surface": ["Neil Armstrong", "Buzz Aldrin"], "orbit": "Michael Collins" },
+      "coordinates": { "lat": 0.674, "lon": 23.473 },
+      "leftBehind": [
+        { "en": "Lunar module descent stage", "es": "Etapa de descenso del módulo lunar" },
+        { "en": "Passive seismometer (PSE)", "es": "Sismómetro pasivo (PSE)" },
+        { "en": "Laser ranging retroreflector", "es": "Retrorreflector láser" },
+        { "en": "Plaque on the lander's leg", "es": "Placa en la pata del módulo" }
+      ],
+      "story": {
+        "en": "The descent stage of Eagle still stands in the Sea of Tranquility, where Neil Armstrong and Buzz Aldrin landed on 20 July 1969. Beside it rests a laser retroreflector that observatories on Earth still use to measure the distance to the Moon. A plaque on the lander's leg reads: \"We came in peace for all mankind.\" They walked outside for about two and a half hours.",
+        "es": "La etapa de descenso del Eagle sigue en el Mar de la Tranquilidad, donde Neil Armstrong y Buzz Aldrin alunizaron el 20 de julio de 1969. A su lado hay un retrorreflector láser que los observatorios en la Tierra todavía usan para medir la distancia a la Luna. Una placa en la pata del módulo dice: \"Vinimos en paz en nombre de toda la humanidad.\" Caminaron afuera unas dos horas y media."
+      },
+      "photo": null
+    },
+    {
+      "id": "apollo-12",
+      "mission": "Apollo 12",
+      "order": 2,
+      "label": "SITE 02 · 1969",
+      "lander": "Intrepid",
+      "region": { "en": "Ocean of Storms", "es": "Océano de las Tormentas" },
+      "landedAt": "1969-11-19T06:54:35Z",
+      "crew": { "surface": ["Pete Conrad", "Alan Bean"], "orbit": "Richard Gordon" },
+      "coordinates": { "lat": -3.013, "lon": -23.422 },
+      "leftBehind": [
+        { "en": "Lunar module descent stage", "es": "Etapa de descenso del módulo lunar" },
+        { "en": "ALSEP science station", "es": "Estación científica ALSEP" },
+        { "en": "Surveyor 3 lander (1967), nearby", "es": "Sonda Surveyor 3 (1967), cerca" }
+      ],
+      "story": {
+        "en": "The descent stage of Intrepid sits in the Ocean of Storms, less than 200 meters from Surveyor 3, a robotic lander that arrived in 1967. In November 1969 Pete Conrad and Alan Bean landed close enough to walk to it and bring parts of it home, including its camera. Their ALSEP science station was left beside the lander.",
+        "es": "La etapa de descenso del Intrepid está en el Océano de las Tormentas, a menos de 200 metros de la Surveyor 3, una sonda robótica que llegó en 1967. En noviembre de 1969 Pete Conrad y Alan Bean alunizaron tan cerca que caminaron hasta ella y se llevaron piezas a la Tierra, entre ellas su cámara. Su estación científica ALSEP quedó junto al módulo."
+      },
+      "photo": null
+    },
+    {
+      "id": "apollo-14",
+      "mission": "Apollo 14",
+      "order": 3,
+      "label": "SITE 03 · 1971",
+      "lander": "Antares",
+      "region": { "en": "Fra Mauro", "es": "Fra Mauro" },
+      "landedAt": "1971-02-05T09:18:11Z",
+      "crew": { "surface": ["Alan Shepard", "Edgar Mitchell"], "orbit": "Stuart Roosa" },
+      "coordinates": { "lat": -3.646, "lon": -17.472 },
+      "leftBehind": [
+        { "en": "Lunar module descent stage", "es": "Etapa de descenso del módulo lunar" },
+        { "en": "ALSEP science station", "es": "Estación científica ALSEP" },
+        { "en": "Laser ranging retroreflector", "es": "Retrorreflector láser" },
+        { "en": "Modular Equipment Transporter (hand cart)", "es": "Carrito de mano (MET)" },
+        { "en": "Two golf balls", "es": "Dos pelotas de golf" }
+      ],
+      "story": {
+        "en": "The descent stage of Antares rests in the Fra Mauro highlands, where Alan Shepard and Edgar Mitchell landed in February 1971. They pulled their tools and samples in a two-wheeled hand cart, the only one used on the Moon. Before leaving, Shepard hit two golf balls with a six-iron head fitted to a sample tool. The balls are still there, with a science station and a laser retroreflector.",
+        "es": "La etapa de descenso del Antares está en las tierras altas de Fra Mauro, donde Alan Shepard y Edgar Mitchell alunizaron en febrero de 1971. Llevaban las herramientas y las muestras en un carrito de mano de dos ruedas, el único usado en la Luna. Antes de irse, Shepard golpeó dos pelotas de golf con la cabeza de un hierro 6 montada en una herramienta de muestreo. Las pelotas siguen ahí, junto a una estación científica y un retrorreflector láser."
+      },
+      "photo": null
+    },
+    {
+      "id": "apollo-15",
+      "mission": "Apollo 15",
+      "order": 4,
+      "label": "SITE 04 · 1971",
+      "lander": "Falcon",
+      "region": { "en": "Hadley–Apennine", "es": "Hadley–Apeninos" },
+      "landedAt": "1971-07-30T22:16:29Z",
+      "crew": { "surface": ["David Scott", "James Irwin"], "orbit": "Alfred Worden" },
+      "coordinates": { "lat": 26.132, "lon": 3.633 },
+      "leftBehind": [
+        { "en": "First Lunar Roving Vehicle (LRV)", "es": "Primer vehículo lunar (LRV)" },
+        { "en": "ALSEP science station", "es": "Estación científica ALSEP" },
+        { "en": "Laser ranging retroreflector", "es": "Retrorreflector láser" },
+        { "en": "Fallen Astronaut figure and plaque", "es": "Figura y placa del Astronauta Caído" }
+      ],
+      "story": {
+        "en": "The first lunar rover is still parked near Hadley Rille, where Dave Scott left it in 1971. Scott and James Irwin drove it nearly 28 kilometers through the foothills of the Apennine mountains. On camera, Scott dropped a hammer and a falcon feather together, and they hit the ground at the same moment. Nearby lie a small aluminum figure and a plaque with the names of fourteen astronauts and cosmonauts who had died.",
+        "es": "El primer vehículo lunar sigue estacionado cerca de la grieta Hadley, donde Dave Scott lo dejó en 1971. Scott y James Irwin recorrieron con él casi 28 kilómetros por las faldas de los montes Apeninos. Frente a la cámara, Scott soltó a la vez un martillo y una pluma de halcón, y llegaron al suelo al mismo tiempo. Cerca quedan una pequeña figura de aluminio y una placa con los nombres de catorce astronautas y cosmonautas fallecidos."
+      },
+      "photo": null
+    },
+    {
+      "id": "apollo-16",
+      "mission": "Apollo 16",
+      "order": 5,
+      "label": "SITE 05 · 1972",
+      "lander": "Orion",
+      "region": { "en": "Descartes Highlands", "es": "Tierras altas de Descartes" },
+      "landedAt": "1972-04-21T02:23:35Z",
+      "crew": { "surface": ["John Young", "Charles Duke"], "orbit": "Ken Mattingly" },
+      "coordinates": { "lat": -8.973, "lon": 15.501 },
+      "leftBehind": [
+        { "en": "Lunar Roving Vehicle", "es": "Vehículo lunar (LRV)" },
+        { "en": "ALSEP science station", "es": "Estación científica ALSEP" },
+        { "en": "Far Ultraviolet Camera/Spectrograph", "es": "Cámara/espectrógrafo ultravioleta" },
+        { "en": "Duke family photograph", "es": "Foto de la familia Duke" }
+      ],
+      "story": {
+        "en": "The first telescope ever set up on the Moon still points at the sky from the Descartes Highlands. John Young and Charlie Duke placed it in April 1972: an ultraviolet camera designed by George Carruthers. They spent about three days there and drove their rover across the highlands. Duke also left a photograph of his family on the ground, signed on the back.",
+        "es": "El primer telescopio instalado en la Luna sigue apuntando al cielo desde las tierras altas de Descartes. John Young y Charlie Duke lo colocaron en abril de 1972: una cámara ultravioleta diseñada por George Carruthers. Pasaron unos tres días ahí y recorrieron las tierras altas en su vehículo. Duke dejó también en el suelo una foto de su familia, firmada al reverso."
+      },
+      "photo": null
+    },
+    {
+      "id": "apollo-17",
+      "mission": "Apollo 17",
+      "order": 6,
+      "label": "SITE 06 · 1972",
+      "lander": "Challenger",
+      "region": { "en": "Taurus–Littrow valley", "es": "Valle Taurus–Littrow" },
+      "landedAt": "1972-12-11T19:54:57Z",
+      "crew": { "surface": ["Eugene Cernan", "Harrison Schmitt"], "orbit": "Ronald Evans" },
+      "coordinates": { "lat": 20.191, "lon": 30.772 },
+      "leftBehind": [
+        { "en": "Lunar Roving Vehicle", "es": "Vehículo lunar (LRV)" },
+        { "en": "ALSEP science station", "es": "Estación científica ALSEP" },
+        { "en": "Plaque on the lander's leg", "es": "Placa en la pata del módulo" }
+      ],
+      "story": {
+        "en": "The descent stage of Challenger marks the last place people have walked on the Moon. Gene Cernan and Harrison Schmitt, a geologist, explored the Taurus–Littrow valley for three days in December 1972 and found orange volcanic soil. When a rover fender broke, they repaired it with maps and tape. Cernan was the last to step off the surface, on 14 December 1972.",
+        "es": "La etapa de descenso del Challenger marca el último lugar donde caminaron personas en la Luna. Gene Cernan y Harrison Schmitt, geólogo, exploraron el valle Taurus–Littrow durante tres días en diciembre de 1972 y encontraron suelo volcánico anaranjado. Cuando se rompió un guardabarros del vehículo, lo repararon con mapas y cinta. Cernan fue el último en dejar la superficie, el 14 de diciembre de 1972."
+      },
+      "photo": null
+    }
+  ]
+}

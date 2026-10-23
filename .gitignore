@@ -1,0 +1,5 @@
+.env.local
+*.xcodeproj
+.DS_Store
+supabase/.temp/
+Lumoria/Config/Secrets.xcconfig

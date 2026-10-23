@@ -19,6 +19,7 @@ enum Route: Hashable {
     case moon(selected: String?)
     case archive
     case sky
+    case skyCamera
 }
 
 struct RootView: View {
@@ -32,13 +33,15 @@ struct RootView: View {
                     case .moon(let selected): MoonView(initialSelection: selected)
                     case .archive: ArchiveView(path: $path)
                     case .sky: SkyView()
+                    case .skyCamera: SkyCameraView()
                     }
                 }
         }
         #if DEBUG
         .onAppear {
-            // `-LumoriaOpenTable YES` opens table mode directly, for checking AR on a device.
+            // `-LumoriaOpenTable YES` / `-LumoriaOpenSky YES` open a mode directly, for checking AR on a device.
             if UserDefaults.standard.bool(forKey: "LumoriaOpenTable") { path = [.moon(selected: nil)] }
+            if UserDefaults.standard.bool(forKey: "LumoriaOpenSky") { path = [.sky, .skyCamera] }
         }
         #endif
     }

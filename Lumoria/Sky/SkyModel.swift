@@ -12,6 +12,8 @@ struct SkySnapshot: Sendable {
     /// Degrees clockwise from true north.
     var azimuth: Double
     var illuminatedFraction: Double
+    /// Apparent diameter of the disk, in degrees (about half a degree).
+    var diameter: Double
     /// Libration: the sub-Earth point on the Moon, in degrees.
     var librationLat: Double
     var librationLon: Double
@@ -71,6 +73,7 @@ enum SkyModel {
             date: date,
             altitude: horizon.altitude, azimuth: horizon.azimuth,
             illuminatedFraction: illumination.phase_fraction,
+            diameter: libration.diam_deg,
             librationLat: libration.elat, librationLon: libration.elon,
             polePositionAngle: poleAngle, parallacticAngle: parallactic,
             northFromUp: wrap180(poleAngle - parallactic),

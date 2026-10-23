@@ -58,7 +58,13 @@ struct SkyView: View {
                     .frame(maxWidth: 300)
                     .frame(maxWidth: .infinity)
 
-                if sky.isUp { finder(sky: sky) }
+                if sky.isUp {
+                    finder(sky: sky)
+                    NavigationLink(value: Route.skyCamera) {
+                        Text(tr("See it through the camera", "Verla en la cámara"))
+                    }
+                    .buttonStyle(.primary)
+                }
 
                 facts(sky: sky)
                 siteList(sky: sky)

@@ -24,11 +24,19 @@
 	<string>$(SUPABASE_ANON_KEY)</string>
 	<key>SUPABASE_HOST</key>
 	<string>$(SUPABASE_HOST)</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Archivo-Medium.ttf</string>
+		<string>Archivo-ExtraBold.ttf</string>
+		<string>IBMPlexMono-Medium.ttf</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>UIUserInterfaceStyle</key>
+	<string>Dark</string>
 </dict>
 </plist>

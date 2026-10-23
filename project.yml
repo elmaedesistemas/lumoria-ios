@@ -26,6 +26,8 @@ targets:
         CFBundleDisplayName: Lumoria
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIUserInterfaceStyle: Dark
+        UIAppFonts: [Archivo-Medium.ttf, Archivo-ExtraBold.ttf, IBMPlexMono-Medium.ttf]
         SUPABASE_HOST: $(SUPABASE_HOST)
         SUPABASE_ANON_KEY: $(SUPABASE_ANON_KEY)
     settings:

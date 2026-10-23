@@ -2,38 +2,36 @@ import SwiftUI
 
 @main
 struct LumoriaApp: App {
+    @State private var store = SitesStore()
+
     var body: some Scene {
         WindowGroup {
-            SitesListView()
+            RootView()
+                .environment(store)
+                .preferredColorScheme(.dark)
+                .tint(.signalText)
+                .task { await store.load() }
         }
     }
 }
 
-/// Temporary screen to check the data layer until the AR modes exist.
-struct SitesListView: View {
-    @State private var sites: [LandingSite] = []
-    @State private var source: SitesRepository.Source?
+enum Route: Hashable {
+    case moon(selected: String?)
+    case archive
+}
+
+struct RootView: View {
+    @State private var path: [Route] = []
 
     var body: some View {
-        NavigationStack {
-            List(sites) { site in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(site.label).font(.caption.monospaced()).foregroundStyle(.secondary)
-                    Text(site.mission).font(.headline)
-                    Text(site.story.current).font(.subheadline).lineLimit(3)
+        NavigationStack(path: $path) {
+            HomeView(path: $path)
+                .navigationDestination(for: Route.self) { route in
+                    switch route {
+                    case .moon(let selected): MoonView(initialSelection: selected)
+                    case .archive: ArchiveView(path: $path)
+                    }
                 }
-            }
-            .navigationTitle("Lumoria")
-            .toolbar {
-                if let source {
-                    Text(source.rawValue.uppercased()).font(.caption2.monospaced())
-                }
-            }
-            .task {
-                let result = await SitesRepository().load()
-                sites = result.sites
-                source = result.source
-            }
         }
     }
 }

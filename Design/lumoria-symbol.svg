@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+<circle cx="200" cy="200" r="180" fill="#D9D4C7"></circle>
+<path d="M90 140C120 110 170 120 180 155C190 190 145 202 115 190C90 180 75 160 90 140Z" fill="#C9C3B4"></path>
+<path d="M230 160C270 145 320 165 315 205C310 240 270 250 240 235C215 222 208 175 230 160Z" fill="#C9C3B4"></path>
+<path d="M160 240C185 230 215 245 208 270C202 290 172 292 158 278C145 265 145 246 160 240Z" fill="#C9C3B4"></path>
+<polyline points="271.7,197.9 128.6,209.5 146,211.4 210.2,120.8 247.6,228.1 286.4,137.9" fill="none" stroke="#7E796D" stroke-width="2" stroke-dasharray="4 5"></polyline>
+<g fill="#FF6B1A" fill-opacity="0.18">
+<circle cx="271.7" cy="197.9" r="20"></circle><circle cx="128.6" cy="209.5" r="20"></circle><circle cx="146" cy="211.4" r="20"></circle><circle cx="210.2" cy="120.8" r="20"></circle><circle cx="247.6" cy="228.1" r="20"></circle><circle cx="286.4" cy="137.9" r="20"></circle>
+</g>
+<g fill="#FF6B1A">
+<circle cx="271.7" cy="197.9" r="9"></circle><circle cx="128.6" cy="209.5" r="9"></circle><circle cx="146" cy="211.4" r="9"></circle><circle cx="210.2" cy="120.8" r="9"></circle><circle cx="247.6" cy="228.1" r="9"></circle><circle cx="286.4" cy="137.9" r="9"></circle>
+</g>
+</svg>

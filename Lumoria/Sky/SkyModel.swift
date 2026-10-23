@@ -1,4 +1,3 @@
-import CAstronomy
 import Foundation
 import simd
 

@@ -3,3 +3,5 @@
 .DS_Store
 supabase/.temp/
 Lumoria/Config/Secrets.xcconfig
+.swiftpm/
+.build/

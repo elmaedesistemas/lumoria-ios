@@ -7,8 +7,6 @@ packages:
   Supabase:
     url: https://github.com/supabase/supabase-swift
     from: 2.0.0
-  AstronomyEngine:
-    path: Packages/AstronomyEngine
 
 targets:
   Lumoria:
@@ -16,6 +14,10 @@ targets:
     platform: iOS
     sources:
       - path: Lumoria
+        excludes: [Vendor/AstronomyEngine/astronomy.c]
+      # Third-party C, vendored unchanged: build it quietly.
+      - path: Lumoria/Vendor/AstronomyEngine/astronomy.c
+        compilerFlags: [-w]
       - path: Data/sites.json
         buildPhase: resources
     # Bundle id and team come from these files (Secrets.xcconfig overrides per Mac).
@@ -37,12 +39,11 @@ targets:
     settings:
       base:
         SWIFT_VERSION: "6.0"
+        SWIFT_OBJC_BRIDGING_HEADER: Lumoria/Lumoria-Bridging-Header.h
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
       - package: Supabase
-      - package: AstronomyEngine
-        product: CAstronomy
 
   LumoriaTests:
     type: bundle.unit-test

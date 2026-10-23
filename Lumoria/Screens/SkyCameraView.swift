@@ -111,7 +111,8 @@ struct SkyCameraView: View {
         HStack(spacing: Spacing.s2) {
             CircleButton(systemName: "chevron.left", label: tr("Back", "Atrás")) { dismiss() }
             Spacer()
-            Text(tracker.isCalibrated ? tr("Calibrated", "Calibrado") : tr("Sky", "Cielo"))
+            Text(tracker.isLocked ? tr("Locked on the Moon", "Fijado en la Luna")
+                 : tracker.isCalibrated ? tr("Calibrated", "Calibrado") : tr("Sky", "Cielo"))
                 .style(.label)
                 .foregroundStyle(Color.ink)
                 .padding(.horizontal, Spacing.s3)
@@ -130,6 +131,9 @@ struct SkyCameraView: View {
             } else if tracker.offscreenAngle != nil {
                 Text(tr("Follow the arrow to find the Moon.", "Sigue la flecha para encontrar la Luna."))
                     .font(TextStyle.bodyStrong.font).foregroundStyle(Color.ink)
+            } else if tracker.isLocked {
+                Text(tr("The ring is following the real Moon.", "El anillo sigue a la Luna real."))
+                    .style(.bodySmall).foregroundStyle(Color.ink)
             } else {
                 Text(tr("The ring should sit on the Moon. If it doesn't, tap the real Moon.",
                         "El anillo debería quedar sobre la Luna. Si no, toca la Luna real."))

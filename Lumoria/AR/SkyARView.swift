@@ -20,11 +20,14 @@ final class SkyTracker {
     var azimuthOffset: Double = 0
     var altitudeOffset: Double = 0
     var isCalibrated = false
+    /// The ring is following the Moon found in the camera image.
+    var isLocked = false
 
     func resetCalibration() {
         azimuthOffset = 0
         altitudeOffset = 0
         isCalibrated = false
+        isLocked = false
     }
 }
 
@@ -69,6 +72,8 @@ struct SkyARView: UIViewRepresentable {
         weak var arView: ARView?
         var sky: SkySnapshot?
         var updates: Cancellable?
+        private var frameCount = 0
+        private var lastLock: Date?
 
         init(tracker: SkyTracker) { self.tracker = tracker }
 
@@ -98,6 +103,9 @@ struct SkyARView: UIViewRepresentable {
                 tracker.moonDiameter = CGFloat(hypot(e.x - p.x, e.y - p.y))
                 let onScreen = arView.bounds.insetBy(dx: 8, dy: 8).contains(p)
                 tracker.offscreenAngle = onScreen ? nil : atan2(Double(p.x - arView.bounds.midX), Double(arView.bounds.midY - p.y)) * 180 / .pi
+                // Look for the real Moon a few times a second.
+                frameCount += 1
+                if frameCount % 6 == 0 { lockOnMoon(near: p, frame: frame, sky: sky, in: arView) }
             } else {
                 tracker.moonPoint = nil
                 // Behind: point the way to turn, from the camera-space direction.
@@ -105,16 +113,60 @@ struct SkyARView: UIViewRepresentable {
             }
         }
 
+        /// Finds the bright disk near the prediction and eases the compass correction toward it.
+        private func lockOnMoon(near predicted: CGPoint, frame: ARFrame, sky: SkySnapshot, in arView: ARView) {
+            let buffer = frame.capturedImage
+            CVPixelBufferLockBaseAddress(buffer, .readOnly)
+            defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+            guard let base = CVPixelBufferGetBaseAddressOfPlane(buffer, 0) else { return }
+            let width = CVPixelBufferGetWidthOfPlane(buffer, 0), height = CVPixelBufferGetHeightOfPlane(buffer, 0)
+            let bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(buffer, 0)
+
+            // Screen points <-> image pixels through the camera's display transform.
+            let view = arView.bounds.size
+            let toView = frame.displayTransform(for: .portrait, viewportSize: view)
+            let toImage = toView.inverted()
+            let n = CGPoint(x: predicted.x / view.width, y: predicted.y / view.height).applying(toImage)
+            let pixelsPerDegree = CGFloat(frame.camera.intrinsics[0][0]) * .pi / 180
+
+            let spot = MoonSpotFinder.find(
+                luma: UnsafeRawBufferPointer(start: base, count: bytesPerRow * height),
+                width: width, height: height, bytesPerRow: bytesPerRow,
+                near: CGPoint(x: n.x * CGFloat(width), y: n.y * CGFloat(height)),
+                searchRadius: 12 * pixelsPerDegree,
+                moonRadius: CGFloat(sky.diameter / 2) * pixelsPerDegree
+            )
+            guard let spot else {
+                if let lastLock, Date().timeIntervalSince(lastLock) > 1.5 { tracker.isLocked = false }
+                return
+            }
+
+            let v = CGPoint(x: spot.center.x / CGFloat(width), y: spot.center.y / CGFloat(height)).applying(toView)
+            guard let ray = arView.ray(through: CGPoint(x: v.x * view.width, y: v.y * view.height)) else { return }
+            let target = Self.offsets(for: simd_normalize(ray.direction), sky: sky)
+            // Ease in so one noisy frame can't jerk the ring.
+            tracker.azimuthOffset += (target.azimuth - tracker.azimuthOffset) * 0.35
+            tracker.altitudeOffset += (target.altitude - tracker.altitudeOffset) * 0.35
+            tracker.isLocked = true
+            tracker.isCalibrated = true
+            lastLock = Date()
+        }
+
+        /// The correction that moves the predicted Moon onto direction `d`.
+        static func offsets(for d: SIMD3<Float>, sky: SkySnapshot) -> (azimuth: Double, altitude: Double) {
+            let azimuth = (atan2(Double(d.x), Double(-d.z)) * 180 / .pi + 360).truncatingRemainder(dividingBy: 360)
+            let altitude = asin(Double(d.y)) * 180 / .pi
+            var dAz = (azimuth - sky.azimuth).truncatingRemainder(dividingBy: 360)
+            if dAz > 180 { dAz -= 360 } else if dAz < -180 { dAz += 360 }
+            return (dAz, altitude - sky.altitude)
+        }
+
         /// A tap on the real Moon: the difference from the prediction is the compass error.
         @objc func tapped(_ gesture: UITapGestureRecognizer) {
             guard let arView, let sky, let ray = arView.ray(through: gesture.location(in: arView)) else { return }
-            let d = simd_normalize(ray.direction)
-            let tappedAzimuth = (atan2(Double(d.x), Double(-d.z)) * 180 / .pi + 360).truncatingRemainder(dividingBy: 360)
-            let tappedAltitude = asin(Double(d.y)) * 180 / .pi
-            var dAz = (tappedAzimuth - sky.azimuth).truncatingRemainder(dividingBy: 360)
-            if dAz > 180 { dAz -= 360 } else if dAz < -180 { dAz += 360 }
-            tracker.azimuthOffset = dAz
-            tracker.altitudeOffset = tappedAltitude - sky.altitude
+            let correction = Self.offsets(for: simd_normalize(ray.direction), sky: sky)
+            tracker.azimuthOffset = correction.azimuth
+            tracker.altitudeOffset = correction.altitude
             tracker.isCalibrated = true
         }
     }

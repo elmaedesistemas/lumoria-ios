@@ -22,10 +22,13 @@ final class SkyTracker {
     var isCalibrated = false
     /// The ring is following the Moon found in the camera image.
     var isLocked = false
+    /// Where the correction is heading; the applied offsets ease toward it every frame.
+    var targetOffset: (azimuth: Double, altitude: Double)?
 
     func resetCalibration() {
         azimuthOffset = 0
         altitudeOffset = 0
+        targetOffset = nil
         isCalibrated = false
         isLocked = false
     }
@@ -74,6 +77,8 @@ struct SkyARView: UIViewRepresentable {
         var updates: Cancellable?
         private var frameCount = 0
         private var lastLock: Date?
+        private var gate = DetectionGate()
+        private var ringFilter = PointFilter()
 
         init(tracker: SkyTracker) { self.tracker = tracker }
 
@@ -88,6 +93,12 @@ struct SkyARView: UIViewRepresentable {
             tracker.viewSize = arView.bounds.size
             if case .normal = frame.camera.trackingState { tracker.isTracking = true } else { tracker.isTracking = false }
 
+            // Spread each correction over a few frames instead of jumping to it.
+            if let target = tracker.targetOffset {
+                tracker.azimuthOffset += (target.azimuth - tracker.azimuthOffset) * 0.12
+                tracker.altitudeOffset += (target.altitude - tracker.altitudeOffset) * 0.12
+            }
+
             let azimuth = sky.azimuth + tracker.azimuthOffset
             let altitude = sky.altitude + tracker.altitudeOffset
             let camera = arView.cameraTransform
@@ -99,14 +110,17 @@ struct SkyARView: UIViewRepresentable {
             let toTarget = simd_mul(camera.matrix.inverse, SIMD4(target, 1))
             let inFront = toTarget.z < 0   // The camera looks down its -z.
             if inFront, let p = arView.project(target), let e = arView.project(edge) {
-                tracker.moonPoint = p
-                tracker.moonDiameter = CGFloat(hypot(e.x - p.x, e.y - p.y))
                 let onScreen = arView.bounds.insetBy(dx: 8, dy: 8).contains(p)
+                // Smooth only what's drawn; detection searches around the raw prediction.
+                tracker.moonPoint = onScreen ? ringFilter.filter(p, at: frame.timestamp) : p
+                if !onScreen { ringFilter.reset() }
+                tracker.moonDiameter = CGFloat(hypot(e.x - p.x, e.y - p.y))
                 tracker.offscreenAngle = onScreen ? nil : atan2(Double(p.x - arView.bounds.midX), Double(arView.bounds.midY - p.y)) * 180 / .pi
-                // Look for the real Moon a few times a second.
+                // Look for the real Moon ~20 times a second.
                 frameCount += 1
-                if frameCount % 6 == 0 { lockOnMoon(near: p, frame: frame, sky: sky, in: arView) }
+                if onScreen, frameCount % 3 == 0 { lockOnMoon(near: p, frame: frame, sky: sky, in: arView) }
             } else {
+                ringFilter.reset()
                 tracker.moonPoint = nil
                 // Behind: point the way to turn, from the camera-space direction.
                 tracker.offscreenAngle = atan2(Double(toTarget.x), Double(toTarget.y)) * 180 / .pi
@@ -143,10 +157,12 @@ struct SkyARView: UIViewRepresentable {
 
             let v = CGPoint(x: spot.center.x / CGFloat(width), y: spot.center.y / CGFloat(height)).applying(toView)
             guard let ray = arView.ray(through: CGPoint(x: v.x * view.width, y: v.y * view.height)) else { return }
-            let target = Self.offsets(for: simd_normalize(ray.direction), sky: sky)
-            // Ease in so one noisy frame can't jerk the ring.
-            tracker.azimuthOffset += (target.azimuth - tracker.azimuthOffset) * 0.35
-            tracker.altitudeOffset += (target.altitude - tracker.altitudeOffset) * 0.35
+            let found = Self.offsets(for: simd_normalize(ray.direction), sky: sky)
+            let current = tracker.targetOffset ?? (tracker.azimuthOffset, tracker.altitudeOffset)
+            // A big jump has to be seen twice before the ring follows it.
+            guard let accepted = gate.accept(azimuth: found.azimuth, altitude: found.altitude,
+                                             current: current, hasLock: tracker.isLocked) else { return }
+            tracker.targetOffset = accepted
             tracker.isLocked = true
             tracker.isCalibrated = true
             lastLock = Date()
@@ -167,6 +183,8 @@ struct SkyARView: UIViewRepresentable {
             let correction = Self.offsets(for: simd_normalize(ray.direction), sky: sky)
             tracker.azimuthOffset = correction.azimuth
             tracker.altitudeOffset = correction.altitude
+            tracker.targetOffset = correction
+            gate.reset()
             tracker.isCalibrated = true
         }
     }

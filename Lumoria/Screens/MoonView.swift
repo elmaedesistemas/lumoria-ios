@@ -16,12 +16,17 @@ struct MoonView: View {
                     .style(.label)
                     .foregroundStyle(Color.inkMuted)
 
-                MoonDisk(sites: store.sites, selectedID: selectedID) { selectedID = $0.id }
-                    .padding(.horizontal, Spacing.s4)
+                if !store.sites.isEmpty {
+                    Moon3DView(sites: store.sites, selectedID: selectedID) { selectedID = $0.id }
+                        .aspectRatio(1, contentMode: .fit)
+                }
 
-                Text(tr("Tap a light to open its story.", "Toca una luz para abrir su historia."))
+                Text(tr("Drag to turn the Moon. Tap a light to open its story.",
+                        "Arrastra para girar la Luna. Toca una luz para abrir su historia."))
                     .style(.bodySmall)
                     .foregroundStyle(Color.inkMuted)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, Spacing.s4)
 
                 chips
 

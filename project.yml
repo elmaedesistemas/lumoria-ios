@@ -27,6 +27,7 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIUserInterfaceStyle: Dark
+        NSCameraUsageDescription: Lumoria uses the camera to place the Moon on a surface around you.
         UIAppFonts: [Archivo-Medium.ttf, Archivo-ExtraBold.ttf, IBMPlexMono-Medium.ttf]
         SUPABASE_HOST: $(SUPABASE_HOST)
         SUPABASE_ANON_KEY: $(SUPABASE_ANON_KEY)

@@ -5,6 +5,8 @@ struct HomeView: View {
     @Binding var path: [Route]
     @Environment(SitesStore.self) private var store
     @State private var mode: Mode = .table
+    /// The hero's 3D view only exists while this screen shows, so it never runs beside the AR session.
+    @State private var isVisible = false
 
     enum Mode { case table, sky }
 
@@ -45,6 +47,8 @@ struct HomeView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
+        .onAppear { isVisible = true }
+        .onDisappear { isVisible = false }
     }
 
     private var header: some View {
@@ -64,7 +68,7 @@ struct HomeView: View {
 
     private var hero: some View {
         ZStack(alignment: .topLeading) {
-            if !store.sites.isEmpty {
+            if isVisible && !store.sites.isEmpty {
                 MoonARView(sites: store.sites, mode: .preview, interactive: false)
                     .allowsHitTesting(false)
             }

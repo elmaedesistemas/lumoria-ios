@@ -1,17 +1,30 @@
 import ARKit
+import Combine
 import RealityKit
 import SwiftUI
 
 enum MoonARStatus: Equatable {
-    case searching      // Looking for a horizontal surface.
-    case placed         // The Moon is on the table (or floating in the preview).
+    case searching      // No surface under the screen center yet.
+    case readyToPlace   // The reticle is on a surface; the Moon follows it.
+    case placed         // The Moon is fixed in the room (or floating in the preview).
     case cameraDenied
     case unsupported
 }
 
+/// Lets SwiftUI buttons drive the AR session.
+@MainActor
+final class MoonARController {
+    fileprivate weak var coordinator: MoonARView.Coordinator?
+
+    func placeHere() { coordinator?.confirmPlacement() }
+    func move() { coordinator?.startPlacing() }
+    func placeInFront() { coordinator?.placeInFront() }
+}
+
 /// The 3D Moon in an ARView.
 /// `.preview` floats it in front of a fixed camera (home screen, simulator);
-/// `.table` runs world tracking and places it on the first horizontal surface found.
+/// `.table` runs world tracking: a reticle follows the surface you point at and
+/// the Moon is fixed there when you place it.
 struct MoonARView: UIViewRepresentable {
     enum Mode { case preview, table }
 
@@ -19,8 +32,7 @@ struct MoonARView: UIViewRepresentable {
     var mode: Mode
     var selectedID: String?
     var interactive = true
-    /// Increment to place the Moon in front of the camera.
-    var placeInFrontRequest = 0
+    var controller: MoonARController?
     var onSelect: (LandingSite) -> Void = { _ in }
     var onStatus: (MoonARStatus) -> Void = { _ in }
 
@@ -29,6 +41,7 @@ struct MoonARView: UIViewRepresentable {
     func makeUIView(context: Context) -> ARView {
         let coordinator = context.coordinator
         coordinator.parent = self
+        controller?.coordinator = coordinator
 
         #if targetEnvironment(simulator)
         let runsAR = false
@@ -50,6 +63,7 @@ struct MoonARView: UIViewRepresentable {
         if interactive {
             arView.addGestureRecognizer(UITapGestureRecognizer(target: coordinator, action: #selector(Coordinator.tapped(_:))))
             arView.addGestureRecognizer(UIPanGestureRecognizer(target: coordinator, action: #selector(Coordinator.panned(_:))))
+            arView.addGestureRecognizer(UIPinchGestureRecognizer(target: coordinator, action: #selector(Coordinator.pinched(_:))))
         }
 
         Task { await coordinator.scene.build(sites: sites) }
@@ -57,32 +71,45 @@ struct MoonARView: UIViewRepresentable {
     }
 
     func updateUIView(_ arView: ARView, context: Context) {
-        let coordinator = context.coordinator
-        coordinator.parent = self
-        coordinator.applyPose()
-        if placeInFrontRequest != coordinator.lastPlaceRequest {
-            coordinator.lastPlaceRequest = placeInFrontRequest
-            coordinator.placeInFront()
-        }
+        context.coordinator.parent = self
+        controller?.coordinator = context.coordinator
+        context.coordinator.applyPose()
     }
 
     static func dismantleUIView(_ arView: ARView, coordinator: Coordinator) {
+        coordinator.updates?.cancel()
         arView.session.pause()
     }
 
     @MainActor
     final class Coordinator: NSObject, ARSessionDelegate {
+        static let previewFOV: Float = 30
+        static let previewCamera: SIMD3<Float> = [0, 0, 0.42]
+
         var parent: MoonARView?
-        var lastPlaceRequest = 0
         weak var arView: ARView?
         let scene = MoonScene()
-        private var anchor: AnchorEntity?
+        fileprivate var updates: Cancellable?
+
+        private let worldAnchor = AnchorEntity(world: .zero)
+        private let reticle = MoonARView.makeReticle()
+        private var placing = true
+        private var status: MoonARStatus?
+        /// Turns the near side toward the viewer; set when the Moon is placed.
+        private var facingYaw: Float = 0
         private var yaw: Float = 0
         private var pitch: Float = 0
+        private var size: Float = 1
         private var panStart: (yaw: Float, pitch: Float) = (0, 0)
+        private var pinchStart: Float = 1
+
+        // MARK: Setup
 
         func startTracking() {
             guard let arView else { return }
+            // Ask for the camera image explicitly so the room shows behind the Moon.
+            arView.environment.background = .cameraFeed()
+
             let config = ARWorldTrackingConfiguration()
             config.planeDetection = [.horizontal]
             arView.session.delegate = self
@@ -95,6 +122,15 @@ struct MoonARView: UIViewRepresentable {
             coaching.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             arView.addSubview(coaching)
 
+            scene.root.isEnabled = false
+            worldAnchor.addChild(scene.root)
+            worldAnchor.addChild(reticle)
+            reticle.isEnabled = false
+            arView.scene.addAnchor(worldAnchor)
+
+            updates = arView.scene.subscribe(to: SceneEvents.Update.self) { [weak self] _ in
+                MainActor.assumeIsolated { self?.trackReticle() }
+            }
             report(.searching)
         }
 
@@ -109,36 +145,76 @@ struct MoonARView: UIViewRepresentable {
             cameraAnchor.addChild(camera)
             cameraAnchor.addChild(scene.root)
             arView.scene.addAnchor(cameraAnchor)
+            placing = false
             report(.placed)
         }
 
-        /// Moves the Moon so it floats just above `transform` (a point on a surface).
-        func place(on transform: simd_float4x4) {
-            guard let arView else { return }
-            anchor?.removeFromParent()
-            let newAnchor = AnchorEntity(world: transform)
-            scene.root.position = [0, MoonScene.radius * 1.5, 0]
-            newAnchor.addChild(scene.root)
-            arView.scene.addAnchor(newAnchor)
-            anchor = newAnchor
+        // MARK: Placement
+
+        /// While placing, the reticle and the Moon follow the surface under the screen center.
+        private func trackReticle() {
+            guard placing, let arView else { return }
+            let center = CGPoint(x: arView.bounds.midX, y: arView.bounds.midY)
+            guard let hit = arView.raycast(from: center, allowing: .estimatedPlane, alignment: .horizontal).first else {
+                reticle.isEnabled = false
+                scene.root.isEnabled = false
+                report(.searching)
+                return
+            }
+            let point = SIMD3<Float>(hit.worldTransform.columns.3.x, hit.worldTransform.columns.3.y, hit.worldTransform.columns.3.z)
+            reticle.position = point
+            reticle.isEnabled = true
+            setMoon(onSurfaceAt: point)
+            report(.readyToPlace)
+        }
+
+        private func setMoon(onSurfaceAt point: SIMD3<Float>) {
+            scene.root.position = point + [0, MoonScene.radius * 1.5 * size, 0]
+            scene.root.isEnabled = true
+            faceCamera()
+        }
+
+        private func faceCamera() {
+            guard let camera = arView?.cameraTransform.translation else { return }
+            let toCamera = camera - scene.root.position
+            facingYaw = atan2(toCamera.x, toCamera.z)
+            applyPose()
+        }
+
+        func confirmPlacement() {
+            guard placing, reticle.isEnabled else { return }
+            placing = false
+            reticle.isEnabled = false
             report(.placed)
+        }
+
+        func startPlacing() {
+            guard arView?.cameraMode == .ar else { return }
+            placing = true
+            yaw = 0
+            pitch = 0
+            report(.searching)
         }
 
         /// Places the Moon half a meter in front of the camera, for when no surface is found.
         func placeInFront() {
-            guard let camera = arView?.session.currentFrame?.camera.transform else { return }
-            var offset = matrix_identity_float4x4
-            offset.columns.3.z = -0.5
-            offset.columns.3.y = -MoonScene.radius * 1.5
-            place(on: camera * offset)
+            guard let arView, arView.cameraMode == .ar else { return }
+            let camera = arView.cameraTransform
+            let forward = camera.matrix.columns.2
+            scene.root.position = camera.translation - SIMD3(forward.x, forward.y, forward.z) * 0.5
+            scene.root.isEnabled = true
+            reticle.isEnabled = false
+            placing = false
+            faceCamera()
+            report(.placed)
         }
 
         func applyPose() {
-            scene.apply(yaw: yaw, pitch: pitch, selectedID: parent?.selectedID)
+            scene.apply(yaw: facingYaw + yaw, pitch: pitch, selectedID: parent?.selectedID)
+            scene.root.scale = .init(repeating: size)
         }
 
-        static let previewFOV: Float = 30
-        static let previewCamera: SIMD3<Float> = [0, 0, 0.42]
+        // MARK: Gestures
 
         @objc func tapped(_ gesture: UITapGestureRecognizer) {
             guard let arView, let parent else { return }
@@ -147,13 +223,27 @@ struct MoonARView: UIViewRepresentable {
             let hitID = arView.cameraMode == .ar ? arView.entity(at: point)?.name : previewPick(point, in: arView)
             if let site = parent.sites.first(where: { $0.id == hitID }) {
                 parent.onSelect(site)
-                return
+            } else if placing {
+                confirmPlacement()
             }
-            // Tapping a surface (re)places the Moon there.
-            if parent.mode == .table,
-               let hit = arView.raycast(from: point, allowing: .estimatedPlane, alignment: .horizontal).first {
-                place(on: hit.worldTransform)
-            }
+        }
+
+        @objc func panned(_ gesture: UIPanGestureRecognizer) {
+            if gesture.state == .began { panStart = (yaw, pitch) }
+            let t = gesture.translation(in: gesture.view)
+            yaw = panStart.yaw + Float(t.x) * 0.008
+            pitch = max(-1.2, min(1.2, panStart.pitch + Float(t.y) * 0.008))
+            applyPose()
+        }
+
+        @objc func pinched(_ gesture: UIPinchGestureRecognizer) {
+            guard arView?.cameraMode == .ar else { return }
+            if gesture.state == .began { pinchStart = size }
+            let surface = scene.root.position.y - MoonScene.radius * 1.5 * size
+            size = max(0.4, min(3, pinchStart * Float(gesture.scale)))
+            // Keep the Moon resting the same distance above its surface as it grows.
+            scene.root.position.y = surface + MoonScene.radius * 1.5 * size
+            applyPose()
         }
 
         /// The light under `point` on the near-facing half, casting a ray from the preview camera.
@@ -178,29 +268,14 @@ struct MoonARView: UIViewRepresentable {
                 .min { $0.1 < $1.1 }?.0
         }
 
-        @objc func panned(_ gesture: UIPanGestureRecognizer) {
-            if gesture.state == .began { panStart = (yaw, pitch) }
-            let t = gesture.translation(in: gesture.view)
-            yaw = panStart.yaw + Float(t.x) * 0.008
-            pitch = max(-1.2, min(1.2, panStart.pitch + Float(t.y) * 0.008))
-            applyPose()
-        }
-
-        /// Deferred so it never lands while SwiftUI is still building the view.
-        private func report(_ status: MoonARStatus) {
-            Task { @MainActor [weak self] in self?.parent?.onStatus(status) }
+        /// Deferred so it never lands while SwiftUI is still building the view; repeats are dropped.
+        private func report(_ new: MoonARStatus) {
+            guard new != status else { return }
+            status = new
+            Task { @MainActor [weak self] in self?.parent?.onStatus(new) }
         }
 
         // MARK: ARSessionDelegate (called on the main queue)
-
-        nonisolated func session(_ session: ARSession, didAdd anchors: [ARAnchor]) {
-            let planes = anchors.compactMap { ($0 as? ARPlaneAnchor)?.transform }
-            MainActor.assumeIsolated {
-                // The first surface found gets the Moon; later taps can move it.
-                guard anchor == nil, let first = planes.first else { return }
-                place(on: first)
-            }
-        }
 
         nonisolated func session(_ session: ARSession, didFailWithError error: Error) {
             let denied = (error as? ARError)?.code == .cameraUnauthorized
@@ -208,5 +283,18 @@ struct MoonARView: UIViewRepresentable {
                 report(denied ? .cameraDenied : .unsupported)
             }
         }
+    }
+
+    /// A flat signal disc that marks where the Moon will go.
+    @MainActor
+    static func makeReticle() -> Entity {
+        let signal = UIColor(red: 1, green: 0.42, blue: 0.10, alpha: 1)
+        var fill = UnlitMaterial(color: signal)
+        fill.blending = .transparent(opacity: 0.25)
+        let disc = ModelEntity(mesh: .generateCylinder(height: 0.001, radius: MoonScene.radius * 0.9), materials: [fill])
+        let dot = ModelEntity(mesh: .generateCylinder(height: 0.002, radius: MoonScene.radius * 0.06),
+                              materials: [UnlitMaterial(color: signal)])
+        disc.addChild(dot)
+        return disc
     }
 }

@@ -33,5 +33,11 @@ struct RootView: View {
                     }
                 }
         }
+        #if DEBUG
+        .onAppear {
+            // `-LumoriaOpenTable YES` opens table mode directly, for checking AR on a device.
+            if UserDefaults.standard.bool(forKey: "LumoriaOpenTable") { path = [.moon(selected: nil)] }
+        }
+        #endif
     }
 }

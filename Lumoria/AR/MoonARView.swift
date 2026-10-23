@@ -4,6 +4,7 @@ import RealityKit
 import SwiftUI
 
 enum MoonARStatus: Equatable {
+    case starting       // The camera is opening.
     case searching      // No surface under the screen center yet.
     case readyToPlace   // The reticle is on a surface; the Moon follows it.
     case placed         // The Moon is fixed in the room (or floating in the preview).
@@ -102,6 +103,8 @@ struct MoonARView: UIViewRepresentable {
         private var size: Float = 1
         private var panStart: (yaw: Float, pitch: Float) = (0, 0)
         private var pinchStart: Float = 1
+        /// Apple's "move iPhone" guide, shown once at the start and never again after a surface is found.
+        private var coaching: ARCoachingOverlayView?
 
         // MARK: Setup
 
@@ -115,12 +118,6 @@ struct MoonARView: UIViewRepresentable {
             arView.session.delegate = self
             arView.session.run(config)
 
-            let coaching = ARCoachingOverlayView()
-            coaching.session = arView.session
-            coaching.goal = .horizontalPlane
-            coaching.activatesAutomatically = true
-            coaching.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            arView.addSubview(coaching)
 
             scene.root.isEnabled = false
             worldAnchor.addChild(scene.root)
@@ -128,11 +125,26 @@ struct MoonARView: UIViewRepresentable {
             reticle.isEnabled = false
             arView.scene.addAnchor(worldAnchor)
 
+            let coaching = ARCoachingOverlayView()
+            coaching.session = arView.session
+            coaching.goal = .horizontalPlane
+            // Driven by hand: on until the first surface, so it can't come back mid-demo,
+            // and transparent to touches so the buttons always work.
+            coaching.activatesAutomatically = false
+            coaching.isUserInteractionEnabled = false
+            coaching.frame = arView.bounds
+            coaching.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            arView.addSubview(coaching)
+            coaching.setActive(true, animated: true)
+            self.coaching = coaching
+
             updates = arView.scene.subscribe(to: SceneEvents.Update.self) { [weak self] _ in
                 MainActor.assumeIsolated { self?.trackReticle() }
             }
-            report(.searching)
+            report(.starting)
+
         }
+
 
         func placePreview() {
             guard let arView else { return }
@@ -154,6 +166,8 @@ struct MoonARView: UIViewRepresentable {
         /// While placing, the reticle and the Moon follow the surface under the screen center.
         private func trackReticle() {
             guard placing, let arView else { return }
+            // Until the camera delivers frames there is nothing to aim at.
+            guard let frame = arView.session.currentFrame, frame.camera.trackingState != .notAvailable else { return }
             let center = CGPoint(x: arView.bounds.midX, y: arView.bounds.midY)
             guard let hit = arView.raycast(from: center, allowing: .estimatedPlane, alignment: .horizontal).first else {
                 reticle.isEnabled = false
@@ -164,6 +178,7 @@ struct MoonARView: UIViewRepresentable {
             let point = SIMD3<Float>(hit.worldTransform.columns.3.x, hit.worldTransform.columns.3.y, hit.worldTransform.columns.3.z)
             reticle.position = point
             reticle.isEnabled = true
+            endCoaching()
             setMoon(onSurfaceAt: point)
             report(.readyToPlace)
         }
@@ -197,8 +212,15 @@ struct MoonARView: UIViewRepresentable {
         }
 
         /// Places the Moon half a meter in front of the camera, for when no surface is found.
+        private func endCoaching() {
+            guard let coaching else { return }
+            coaching.setActive(false, animated: true)
+            self.coaching = nil
+        }
+
         func placeInFront() {
             guard let arView, arView.cameraMode == .ar else { return }
+            endCoaching()
             let camera = arView.cameraTransform
             let forward = camera.matrix.columns.2
             scene.root.position = camera.translation - SIMD3(forward.x, forward.y, forward.z) * 0.5
@@ -276,6 +298,7 @@ struct MoonARView: UIViewRepresentable {
         }
 
         // MARK: ARSessionDelegate (called on the main queue)
+
 
         nonisolated func session(_ session: ARSession, didFailWithError error: Error) {
             let denied = (error as? ARError)?.code == .cameraUnauthorized

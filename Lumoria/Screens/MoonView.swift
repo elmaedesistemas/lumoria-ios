@@ -7,7 +7,7 @@ struct MoonView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @State private var selectedID: String?
-    @State private var status: MoonARStatus = .searching
+    @State private var status: MoonARStatus = .starting
     @State private var controller = MoonARController()
     @State private var showPlaceFallback = false
 
@@ -102,6 +102,14 @@ struct MoonView: View {
                         "Este dispositivo no puede usar AR. El archivo tiene todas las historias."))
                     .style(.bodySmall).foregroundStyle(Color.ink)
             }
+        case .starting:
+            panel {
+                HStack(spacing: Spacing.s3) {
+                    ProgressView().tint(Color.ink)
+                    Text(tr("Opening the camera…", "Abriendo la cámara…"))
+                        .style(.bodySmall).foregroundStyle(Color.ink)
+                }
+            }
         case .searching:
             panel {
                 Text(tr("Point at a table and move your iPhone slowly.",
@@ -171,6 +179,7 @@ struct MoonView: View {
 
     private var statusText: String {
         switch status {
+        case .starting: tr("Camera", "Cámara")
         case .searching: tr("Finding a surface", "Buscando superficie")
         case .readyToPlace: tr("Surface found", "Superficie lista")
         case .placed: tr("Tap a light", "Toca una luz")

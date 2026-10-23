@@ -35,10 +35,10 @@ struct HomeView: View {
                     modePicker
                     Button(mode == .table ? tr("Place the Moon", "Colocar la Luna")
                                           : tr("Find the Moon", "Buscar la Luna")) {
-                        path.append(.moon(selected: nil))
+                        path.append(mode == .table ? .moon(selected: nil) : .sky)
                     }
                     .buttonStyle(.primary)
-                    .disabled(mode == .sky || store.sites.isEmpty)
+                    .disabled(store.sites.isEmpty)
                 }
                 .padding(.horizontal, Spacing.s4)
                 .padding(.bottom, Spacing.s2)
@@ -96,7 +96,7 @@ struct HomeView: View {
                     detail: tr("On any surface", "Sobre cualquier superficie"),
                     selected: mode == .table) { mode = .table }
             ModeTab(title: tr("Sky", "Cielo"),
-                    detail: tr("The real Moon, soon", "La Luna real, pronto"),
+                    detail: tr("The real Moon, tonight", "La Luna real, de noche"),
                     selected: mode == .sky) { mode = .sky }
         }
     }

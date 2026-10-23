@@ -22,6 +22,8 @@
 	<string>1</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Lumoria uses the camera to place the Moon on a surface around you.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Lumoria uses your location to find the Moon in your sky.</string>
 	<key>SUPABASE_ANON_KEY</key>
 	<string>$(SUPABASE_ANON_KEY)</string>
 	<key>SUPABASE_HOST</key>

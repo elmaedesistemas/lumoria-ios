@@ -4,4 +4,9 @@
 SUPABASE_HOST =
 SUPABASE_ANON_KEY =
 
+// Signing defaults; Secrets.xcconfig overrides them per Mac.
+PRODUCT_BUNDLE_IDENTIFIER = com.elmaedesistemas.lumoria
+DEVELOPMENT_TEAM =
+CODE_SIGN_STYLE = Automatic
+
 #include? "Secrets.xcconfig"

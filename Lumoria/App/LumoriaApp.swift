@@ -18,6 +18,7 @@ struct LumoriaApp: App {
 enum Route: Hashable {
     case moon(selected: String?)
     case archive
+    case sky
 }
 
 struct RootView: View {
@@ -30,6 +31,7 @@ struct RootView: View {
                     switch route {
                     case .moon(let selected): MoonView(initialSelection: selected)
                     case .archive: ArchiveView(path: $path)
+                    case .sky: SkyView()
                     }
                 }
         }

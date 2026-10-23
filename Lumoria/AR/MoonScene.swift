@@ -1,61 +1,8 @@
 import RealityKit
-import SwiftUI
 import UIKit
 
-/// The Moon as a textured sphere with a light on each site.
-/// On a device it sits on a detected horizontal plane (table mode, AR);
-/// in the simulator, where AR is unavailable, it floats in front of a virtual camera.
-struct Moon3DView: View {
-    let sites: [LandingSite]
-    var selectedID: String?
-    var onSelect: (LandingSite) -> Void
-
-    @State private var scene = MoonScene()
-    @State private var yaw: Float = 0
-    @State private var pitch: Float = 0
-    @State private var dragStart: (yaw: Float, pitch: Float)?
-
-    var body: some View {
-        RealityView { content in
-            #if targetEnvironment(simulator)
-            content.camera = .virtual
-            let camera = PerspectiveCamera()
-            camera.camera.fieldOfViewInDegrees = 40
-            camera.position = [0, 0, 0.42]
-            content.add(camera)
-            content.add(scene.root)
-            #else
-            content.camera = .spatialTracking
-            let anchor = AnchorEntity(.plane(.horizontal, classification: .any, minimumBounds: [0.2, 0.2]))
-            scene.root.position = [0, MoonScene.radius * 1.6, 0]
-            anchor.addChild(scene.root)
-            content.add(anchor)
-            #endif
-            await scene.build(sites: sites)
-        } update: { _ in
-            scene.apply(yaw: yaw, pitch: pitch, selectedID: selectedID)
-        }
-        .gesture(
-            SpatialTapGesture()
-                .targetedToAnyEntity()
-                .onEnded { value in
-                    if let site = sites.first(where: { $0.id == value.entity.name }) { onSelect(site) }
-                }
-        )
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 4)
-                .onChanged { value in
-                    let start = dragStart ?? (yaw, pitch)
-                    dragStart = start
-                    yaw = start.yaw + Float(value.translation.width) * 0.008
-                    pitch = max(-1.2, min(1.2, start.pitch + Float(value.translation.height) * 0.008))
-                }
-                .onEnded { _ in dragStart = nil }
-        )
-    }
-}
-
-/// Owns the entities so SwiftUI updates can reach them.
+/// The Moon entity tree: a textured sphere and a light on each site.
+/// Shared by the home preview and the AR table mode.
 @MainActor
 final class MoonScene {
     static let radius: Float = 0.1
@@ -85,10 +32,21 @@ final class MoonScene {
             light.addChild(ModelEntity(mesh: .generateSphere(radius: Self.radius * 0.07), materials: [haloMaterial]))
             // Generous tap target so a finger can hit a 7 mm light.
             light.components.set(CollisionComponent(shapes: [.generateSphere(radius: Self.radius * 0.12)]))
-            light.components.set(InputTargetComponent())
+            light.isEnabled = false
             root.addChild(light)
             lights[site.id] = light
         }
+
+        // Lights appear one by one in mission order, ~120 ms apart.
+        for site in sites {
+            try? await Task.sleep(for: .milliseconds(120))
+            lights[site.id]?.isEnabled = true
+        }
+    }
+
+    /// World positions of the lights that are showing.
+    var visibleLights: [(id: String, position: SIMD3<Float>)] {
+        lights.compactMap { id, light in light.isEnabled ? (id, light.position(relativeTo: nil)) : nil }
     }
 
     func apply(yaw: Float, pitch: Float, selectedID: String?) {
@@ -106,6 +64,7 @@ final class MoonScene {
     }
 
     /// Rotation that brings the equirectangular map's center (longitude 0) to +Z.
+    /// Checked against Tycho, Copernicus and the maria in the simulator.
     static let textureYaw: Float = .pi / 2
 
     private func moonMaterial() async -> RealityKit.Material {

@@ -53,11 +53,14 @@ enum Radius {
 
 /// Text styles: Archivo for what you read, IBM Plex Mono for what you measure.
 enum TextStyle {
-    case wordmark, title, heading, body, bodySmall, bodyStrong, label, coordinate
+    case wordmark, wordmarkSmall, display, title, heading, body, bodySmall, bodyStrong, label, coordinate, index
 
     var font: Font {
         switch self {
         case .wordmark: .custom("Archivo-ExtraBold", fixedSize: 34)
+        case .wordmarkSmall: .custom("Archivo-ExtraBold", fixedSize: 17)
+        case .display: .custom("Archivo-ExtraBold", size: 36, relativeTo: .largeTitle)
+        case .index: .custom("IBMPlexMono-Medium", size: 22, relativeTo: .title3)
         case .title: .custom("Archivo-ExtraBold", size: 48, relativeTo: .largeTitle)
         case .heading: .custom("Archivo-ExtraBold", size: 28, relativeTo: .title)
         case .body: .custom("Archivo-Medium", size: 17, relativeTo: .body)
@@ -71,7 +74,9 @@ enum TextStyle {
     var tracking: CGFloat {
         switch self {
         case .wordmark: 6
+        case .wordmarkSmall: 5
         case .label: 3
+        case .display: -0.5
         default: 0
         }
     }
@@ -85,7 +90,7 @@ enum TextStyle {
         }
     }
 
-    var uppercased: Bool { self == .wordmark || self == .label }
+    var uppercased: Bool { self == .wordmark || self == .wordmarkSmall || self == .label }
 }
 
 extension Text {

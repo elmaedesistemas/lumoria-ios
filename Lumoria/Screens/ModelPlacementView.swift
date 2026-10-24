@@ -34,7 +34,12 @@ struct ModelPlacementView: View {
                         .frame(height: 32)
                         .background(Color.surface, in: Capsule())
                     if status == .placed {
-                        Button { controller.move() } label: {
+                        Button {
+                            // Back to table size first, so the reticle places a small model.
+                            controller.setRealSize(false)
+                            realSize = false
+                            controller.move()
+                        } label: {
                             Text(tr("Move", "Mover")).font(TextStyle.bodyStrong.font).foregroundStyle(Color.ink)
                                 .padding(.horizontal, Spacing.s3)
                                 .frame(height: 32)

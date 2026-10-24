@@ -103,6 +103,10 @@ struct MoonARView: UIViewRepresentable {
         /// A soft dark disc on the surface under the object, so it reads as standing there.
         private let shadow = MoonARView.makeContactShadow()
         private var shadowRadius: Float?
+        /// Detected horizontal planes, painted while placing; the one under the reticle is brighter.
+        private var planeVisuals: [UUID: (anchor: AnchorEntity, model: ModelEntity)] = [:]
+        private var targetPlaneID: UUID?
+        private var paintedTargetID: UUID?
         private var placing = true
         private var status: MoonARStatus?
         /// Turns the near side toward the viewer; set when the Moon is placed.
@@ -172,6 +176,7 @@ struct MoonARView: UIViewRepresentable {
                 MainActor.assumeIsolated {
                     self?.trackReticle()
                     self?.updateShadow()
+                    self?.updatePlaneVisuals()
                 }
             }
             report(.starting)
@@ -229,7 +234,9 @@ struct MoonARView: UIViewRepresentable {
             // Until the camera delivers frames there is nothing to aim at.
             guard let frame = arView.session.currentFrame, frame.camera.trackingState != .notAvailable else { return }
             let center = CGPoint(x: arView.bounds.midX, y: arView.bounds.midY)
-            guard let hit = surfaceHit(at: center, in: arView) else {
+            let hit = surfaceHit(at: center, in: arView)
+            targetPlaneID = hit?.anchor?.identifier
+            guard let hit else {
                 reticle.isEnabled = false
                 scene.root.isEnabled = false
                 report(.searching)
@@ -466,7 +473,61 @@ struct MoonARView: UIViewRepresentable {
             Task { @MainActor [weak self] in self?.parent?.onStatus(new) }
         }
 
+        // MARK: Plane paint
+
+        private static let planeColor = UIColor(red: 1, green: 0.42, blue: 0.10, alpha: 1)
+
+        private static func planeMaterial(highlighted: Bool) -> UnlitMaterial {
+            var material = UnlitMaterial(color: planeColor)
+            material.blending = .transparent(opacity: .init(floatLiteral: highlighted ? 0.45 : 0.18))
+            return material
+        }
+
+        /// Builds or refreshes the painted mesh for a plane from ARKit's outline of it.
+        private func paint(_ plane: ARPlaneAnchor) {
+            guard let arView, arView.cameraMode == .ar else { return }
+            let geometry = plane.geometry
+            var descriptor = MeshDescriptor(name: "plane")
+            descriptor.positions = MeshBuffer(geometry.vertices)
+            descriptor.primitives = .triangles(geometry.triangleIndices.map { UInt32($0) })
+            guard let mesh = try? MeshResource.generate(from: [descriptor]) else { return }
+
+            if let visual = planeVisuals[plane.identifier] {
+                visual.model.model?.mesh = mesh
+                return
+            }
+            let model = ModelEntity(mesh: mesh, materials: [Self.planeMaterial(highlighted: false)])
+            // Just above the real surface so it doesn't flicker against the camera image.
+            model.position.y = 0.001
+            let anchor = AnchorEntity(anchor: plane)
+            anchor.addChild(model)
+            anchor.isEnabled = placing
+            arView.scene.addAnchor(anchor)
+            planeVisuals[plane.identifier] = (anchor, model)
+            paintedTargetID = nil
+        }
+
+        private func updatePlaneVisuals() {
+            for (_, visual) in planeVisuals where visual.anchor.isEnabled != placing {
+                visual.anchor.isEnabled = placing
+            }
+            guard placing, targetPlaneID != paintedTargetID else { return }
+            for (id, visual) in planeVisuals {
+                visual.model.model?.materials = [Self.planeMaterial(highlighted: id == targetPlaneID)]
+            }
+            paintedTargetID = targetPlaneID
+        }
+
         // MARK: ARSessionDelegate (called on the main queue)
+
+        nonisolated func session(_ session: ARSession, didRemove anchors: [ARAnchor]) {
+            let ids = anchors.map(\.identifier)
+            MainActor.assumeIsolated {
+                for id in ids {
+                    if let visual = planeVisuals.removeValue(forKey: id) { arView?.scene.removeAnchor(visual.anchor) }
+                }
+            }
+        }
 
         nonisolated func session(_ session: ARSession, didAdd anchors: [ARAnchor]) {
             let planes = anchors.compactMap { $0 as? ARPlaneAnchor }
@@ -482,6 +543,7 @@ struct MoonARView: UIViewRepresentable {
 
         private func notePlanes(_ planes: [ARPlaneAnchor], cameraY: Float?) {
             for plane in planes where plane.alignment == .horizontal {
+                paint(plane)
                 let y = plane.transform.columns.3.y
                 if plane.classification == .floor {
                     // A classified floor wins over any guess; keep the lowest if there are several.

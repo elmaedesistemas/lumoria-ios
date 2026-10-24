@@ -78,6 +78,7 @@ struct MoonARView: UIViewRepresentable {
         context.coordinator.parent = self
         controller?.coordinator = context.coordinator
         context.coordinator.applyPose()
+        context.coordinator.focusSelection()
     }
 
     static func dismantleUIView(_ arView: ARView, coordinator: Coordinator) {
@@ -108,6 +109,9 @@ struct MoonARView: UIViewRepresentable {
         private var pinchStart: Float = 1
         /// Where the object sat at table size, to return there from real size.
         private var tablePosition: SIMD3<Float>?
+        /// The site the Moon last turned toward, and the turn in progress.
+        private var focusedID: String?
+        private var focusTurn: Cancellable?
 
         init(scene: PlaceableScene) {
             self.scene = scene
@@ -204,6 +208,44 @@ struct MoonARView: UIViewRepresentable {
             let toCamera = camera - scene.root.position
             facingYaw = atan2(toCamera.x, toCamera.z)
             applyPose()
+            focusSelection()
+        }
+
+        /// Turns the Moon so the selected site faces the viewer, once per new selection.
+        func focusSelection() {
+            guard let selectedID = parent?.selectedID else { focusedID = nil; return }
+            guard selectedID != focusedID, !placing, scene is MoonScene, let arView,
+                  let site = parent?.sites.first(where: { $0.id == selectedID }) else { return }
+            focusedID = selectedID
+
+            // Direction to the viewer from the Moon's center; in the preview it's straight ahead.
+            var toViewer = previewCamera - scene.root.position
+            if arView.cameraMode == .ar { toViewer = arView.cameraTransform.translation - scene.root.position }
+            let viewerYaw = atan2(toViewer.x, toViewer.z)
+            let viewerElevation = atan2(toViewer.y, hypot(toViewer.x, toViewer.z))
+
+            // A site at (lat, lon) faces +Z after turning by -lon and tilting by lat.
+            // Tilting less points it up at a viewer looking down on the table, and
+            // `lift` (~30°) puts it in the Moon's upper half, above the story card.
+            let λ = Float(site.lon * .pi / 180), φ = Float(site.lat * .pi / 180)
+            let lift: Float = 0.5
+            let targetYaw = yaw + remainder(viewerYaw - λ - facingYaw - yaw, 2 * .pi)
+            let targetPitch = max(-1.2, min(1.2, φ - viewerElevation - lift))
+
+            let start = (yaw: yaw, pitch: pitch)
+            var elapsed: Float = 0
+            let duration: Float = 0.7
+            focusTurn?.cancel()
+            focusTurn = arView.scene.subscribe(to: SceneEvents.Update.self) { [weak self] event in
+                guard let self else { return }
+                elapsed = min(duration, elapsed + Float(event.deltaTime))
+                let t = elapsed / duration
+                let eased = t * t * (3 - 2 * t)
+                self.yaw = start.yaw + (targetYaw - start.yaw) * eased
+                self.pitch = start.pitch + (targetPitch - start.pitch) * eased
+                self.applyPose()
+                if t >= 1 { self.focusTurn?.cancel(); self.focusTurn = nil }
+            }
         }
 
         func confirmPlacement() {
@@ -261,7 +303,12 @@ struct MoonARView: UIViewRepresentable {
         }
 
         @objc func panned(_ gesture: UIPanGestureRecognizer) {
-            if gesture.state == .began { panStart = (yaw, pitch) }
+            if gesture.state == .began {
+                // A drag takes over from a focus turn still in progress.
+                focusTurn?.cancel()
+                focusTurn = nil
+                panStart = (yaw, pitch)
+            }
             let t = gesture.translation(in: gesture.view)
             yaw = panStart.yaw + Float(t.x) * 0.008
             if scene.allowsTilt { pitch = max(-1.2, min(1.2, panStart.pitch + Float(t.y) * 0.008)) }

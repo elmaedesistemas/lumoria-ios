@@ -111,6 +111,9 @@ struct MoonARView: UIViewRepresentable {
         private var pinchStart: Float = 1
         /// The surface point where a model was placed; growing it moves it away from there.
         private var placedSpot: SIMD3<Float>?
+        /// Height of the floor, from a plane ARKit classified as floor or else the lowest one well below the phone.
+        private var floorY: Float?
+        private var floorIsClassified = false
         /// The site the Moon last turned toward, and the turn in progress.
         private var focusedID: String?
         private var focusTurn: Cancellable?
@@ -180,12 +183,26 @@ struct MoonARView: UIViewRepresentable {
         // MARK: Placement
 
         /// While placing, the reticle and the Moon follow the surface under the screen center.
+        /// Where the screen point meets a horizontal surface: a detected plane if there is one,
+        /// else ARKit's estimate, else the floor plane extended past the part that's been scanned.
+        private func surfaceHit(at point: CGPoint, in arView: ARView) -> ARRaycastResult? {
+            if let hit = arView.raycast(from: point, allowing: .existingPlaneGeometry, alignment: .horizontal).first {
+                return hit
+            }
+            if let hit = arView.raycast(from: point, allowing: .estimatedPlane, alignment: .horizontal).first {
+                return hit
+            }
+            guard let floorY else { return nil }
+            return arView.raycast(from: point, allowing: .existingPlaneInfinite, alignment: .horizontal)
+                .first { abs($0.worldTransform.columns.3.y - floorY) < 0.05 }
+        }
+
         private func trackReticle() {
             guard placing, let arView else { return }
             // Until the camera delivers frames there is nothing to aim at.
             guard let frame = arView.session.currentFrame, frame.camera.trackingState != .notAvailable else { return }
             let center = CGPoint(x: arView.bounds.midX, y: arView.bounds.midY)
-            guard let hit = arView.raycast(from: center, allowing: .estimatedPlane, alignment: .horizontal).first else {
+            guard let hit = surfaceHit(at: center, in: arView) else {
                 reticle.isEnabled = false
                 scene.root.isEnabled = false
                 report(.searching)
@@ -370,14 +387,17 @@ struct MoonARView: UIViewRepresentable {
                 target.y = spot.y
             }
 
-            // Taller than a table can hold: stand it on the floor ARKit finds there,
-            // or ~1.4 m below the phone if it hasn't seen the floor yet.
+            // Taller than a table can hold: stand it on the floor ARKit has found, or the
+            // estimate under that spot, or ~1.4 m below the phone if neither exists yet.
             if height > 1 {
-                var floor = min(spot.y, camera.translation.y - 1.4)
-                let down = ARRaycastQuery(origin: [target.x, camera.translation.y, target.z], direction: [0, -1, 0],
-                                          allowing: .estimatedPlane, alignment: .horizontal)
-                if let hit = arView.session.raycast(down).first { floor = hit.worldTransform.columns.3.y }
-                target.y = floor
+                if let floorY {
+                    target.y = floorY
+                } else {
+                    let down = ARRaycastQuery(origin: [target.x, camera.translation.y, target.z], direction: [0, -1, 0],
+                                              allowing: .estimatedPlane, alignment: .horizontal)
+                    target.y = arView.session.raycast(down).first?.worldTransform.columns.3.y
+                        ?? min(spot.y, camera.translation.y - 1.4)
+                }
             }
             scene.root.position = target + [0, scene.restHeight * size, 0]
         }
@@ -420,6 +440,31 @@ struct MoonARView: UIViewRepresentable {
         }
 
         // MARK: ARSessionDelegate (called on the main queue)
+
+        nonisolated func session(_ session: ARSession, didAdd anchors: [ARAnchor]) {
+            let planes = anchors.compactMap { $0 as? ARPlaneAnchor }
+            let cameraY = session.currentFrame?.camera.transform.columns.3.y
+            MainActor.assumeIsolated { notePlanes(planes, cameraY: cameraY) }
+        }
+
+        nonisolated func session(_ session: ARSession, didUpdate anchors: [ARAnchor]) {
+            let planes = anchors.compactMap { $0 as? ARPlaneAnchor }
+            let cameraY = session.currentFrame?.camera.transform.columns.3.y
+            MainActor.assumeIsolated { notePlanes(planes, cameraY: cameraY) }
+        }
+
+        private func notePlanes(_ planes: [ARPlaneAnchor], cameraY: Float?) {
+            for plane in planes where plane.alignment == .horizontal {
+                let y = plane.transform.columns.3.y
+                if plane.classification == .floor {
+                    // A classified floor wins over any guess; keep the lowest if there are several.
+                    floorY = floorIsClassified ? min(floorY ?? y, y) : y
+                    floorIsClassified = true
+                } else if !floorIsClassified, let cameraY, y < cameraY - 0.8 {
+                    floorY = min(floorY ?? y, y)
+                }
+            }
+        }
 
 
         nonisolated func session(_ session: ARSession, didFailWithError error: Error) {

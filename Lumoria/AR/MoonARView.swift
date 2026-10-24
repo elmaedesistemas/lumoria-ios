@@ -128,6 +128,10 @@ struct MoonARView: UIViewRepresentable {
         private var planeVisuals: [UUID: (anchor: AnchorEntity, model: ModelEntity)] = [:]
         private var targetPlaneID: UUID?
         private var paintedTargetID: UUID?
+        /// The LiDAR mesh of the room: every chunk ARKit reports, drawn only while the mesh button is on.
+        private var meshVisible = false
+        private var meshAnchors: [UUID: ARMeshAnchor] = [:]
+        private var meshVisuals: [UUID: (anchor: AnchorEntity, model: ModelEntity, built: CFTimeInterval)] = [:]
         private var placing = true
         private var status: MoonARStatus?
         /// Turns the near side toward the viewer; set when the Moon is placed.
@@ -510,13 +514,65 @@ struct MoonARView: UIViewRepresentable {
             Task { @MainActor [weak self] in self?.parent?.onStatus(new) }
         }
 
+        // MARK: Room mesh
+
         func setMeshVisible(_ visible: Bool) {
-            guard let arView, arView.cameraMode == .ar else { return }
-            if visible {
-                arView.debugOptions.insert(.showSceneUnderstanding)
-            } else {
-                arView.debugOptions.remove(.showSceneUnderstanding)
+            guard arView?.cameraMode == .ar else { return }
+            meshVisible = visible
+            for visual in meshVisuals.values { visual.anchor.isEnabled = visible }
+            if visible { meshAnchors.values.forEach { drawMesh($0, force: true) } }
+        }
+
+        private func noteMeshes(_ meshes: [ARMeshAnchor]) {
+            for mesh in meshes {
+                meshAnchors[mesh.identifier] = mesh
+                if meshVisible { drawMesh(mesh, force: false) }
             }
+        }
+
+        private static let meshMaterial: UnlitMaterial = {
+            var material = UnlitMaterial(color: .white)
+            material.blending = .transparent(opacity: .init(floatLiteral: 0.35))
+            material.triangleFillMode = .lines
+            return material
+        }()
+
+        /// Turns one LiDAR mesh chunk into a wireframe. ARKit updates chunks many times a
+        /// second, so each is rebuilt at most twice a second unless forced.
+        private func drawMesh(_ mesh: ARMeshAnchor, force: Bool) {
+            guard let arView else { return }
+            let now = CACurrentMediaTime()
+            if !force, let built = meshVisuals[mesh.identifier]?.built, now - built < 0.5 { return }
+
+            let geometry = mesh.geometry
+            let vertices = geometry.vertices
+            let base = vertices.buffer.contents().advanced(by: vertices.offset)
+            var positions: [SIMD3<Float>] = []
+            positions.reserveCapacity(vertices.count)
+            for i in 0..<vertices.count {
+                let v = base.advanced(by: i * vertices.stride).assumingMemoryBound(to: Float.self)
+                positions.append([v[0], v[1], v[2]])
+            }
+            let faces = geometry.faces
+            let indexCount = faces.count * faces.indexCountPerPrimitive
+            guard faces.bytesPerIndex == 4 else { return }
+            let indices = faces.buffer.contents().bindMemory(to: UInt32.self, capacity: indexCount)
+            var descriptor = MeshDescriptor(name: "room")
+            descriptor.positions = MeshBuffer(positions)
+            descriptor.primitives = .triangles(Array(UnsafeBufferPointer(start: indices, count: indexCount)))
+            guard let resource = try? MeshResource.generate(from: [descriptor]) else { return }
+
+            if let visual = meshVisuals[mesh.identifier] {
+                visual.model.model?.mesh = resource
+                meshVisuals[mesh.identifier]?.built = now
+                return
+            }
+            let model = ModelEntity(mesh: resource, materials: [Self.meshMaterial])
+            let anchor = AnchorEntity(anchor: mesh)
+            anchor.addChild(model)
+            anchor.isEnabled = meshVisible
+            arView.scene.addAnchor(anchor)
+            meshVisuals[mesh.identifier] = (anchor, model, now)
         }
 
         // MARK: Plane paint
@@ -571,20 +627,30 @@ struct MoonARView: UIViewRepresentable {
             MainActor.assumeIsolated {
                 for id in ids {
                     if let visual = planeVisuals.removeValue(forKey: id) { arView?.scene.removeAnchor(visual.anchor) }
+                    meshAnchors[id] = nil
+                    if let visual = meshVisuals.removeValue(forKey: id) { arView?.scene.removeAnchor(visual.anchor) }
                 }
             }
         }
 
         nonisolated func session(_ session: ARSession, didAdd anchors: [ARAnchor]) {
             let planes = anchors.compactMap { $0 as? ARPlaneAnchor }
+            let meshes = anchors.compactMap { $0 as? ARMeshAnchor }
             let cameraY = session.currentFrame?.camera.transform.columns.3.y
-            MainActor.assumeIsolated { notePlanes(planes, cameraY: cameraY) }
+            MainActor.assumeIsolated {
+                notePlanes(planes, cameraY: cameraY)
+                noteMeshes(meshes)
+            }
         }
 
         nonisolated func session(_ session: ARSession, didUpdate anchors: [ARAnchor]) {
             let planes = anchors.compactMap { $0 as? ARPlaneAnchor }
+            let meshes = anchors.compactMap { $0 as? ARMeshAnchor }
             let cameraY = session.currentFrame?.camera.transform.columns.3.y
-            MainActor.assumeIsolated { notePlanes(planes, cameraY: cameraY) }
+            MainActor.assumeIsolated {
+                notePlanes(planes, cameraY: cameraY)
+                noteMeshes(meshes)
+            }
         }
 
         private func notePlanes(_ planes: [ARPlaneAnchor], cameraY: Float?) {

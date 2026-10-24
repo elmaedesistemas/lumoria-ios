@@ -1,17 +1,50 @@
 import RealityKit
 import UIKit
 
+/// Something MoonARView can place on a surface: the Moon, or a spacecraft model.
+@MainActor
+protocol PlaceableScene: AnyObject {
+    var root: Entity { get }
+    /// Height of `root`'s origin above the surface, at size 1.
+    var restHeight: Float { get }
+    /// Radius of the placement reticle.
+    var footprint: Float { get }
+    /// Pinch limits, as multiples of the starting size.
+    var sizeRange: ClosedRange<Float> { get }
+    /// The size multiple that shows the object at its real dimensions, if that makes sense.
+    var realSize: Float? { get }
+    var allowsTilt: Bool { get }
+    /// Camera distance in the non-AR preview.
+    var previewDistance: Float { get }
+    /// Tappable lights, for picking in the preview.
+    var visibleLights: [(id: String, position: SIMD3<Float>)] { get }
+    func prepare() async
+    func apply(yaw: Float, pitch: Float, selectedID: String?)
+}
+
 /// The Moon entity tree: a textured sphere and a light on each site.
 /// Shared by the home preview and the AR table mode.
 @MainActor
-final class MoonScene {
+final class MoonScene: PlaceableScene {
     static let radius: Float = 0.1
 
     let root = Entity()
+    let restHeight = MoonScene.radius * 1.5
+    let footprint = MoonScene.radius * 0.9
+    let sizeRange: ClosedRange<Float> = 0.4...3
+    let realSize: Float? = nil
+    let allowsTilt = true
+    let previewDistance: Float = 0.42
+
+    private let sites: [LandingSite]
     private var lights: [String: Entity] = [:]
     private var built = false
 
-    func build(sites: [LandingSite]) async {
+    init(sites: [LandingSite]) { self.sites = sites }
+
+    func prepare() async { await build(sites: sites) }
+
+    private func build(sites: [LandingSite]) async {
         guard !built else { return }
         built = true
 
@@ -25,11 +58,13 @@ final class MoonScene {
         haloMaterial.blending = .transparent(opacity: 0.3)
 
         for site in sites {
-            let light = ModelEntity(mesh: .generateSphere(radius: Self.radius * 0.035),
+            let light = ModelEntity(mesh: .generateSphere(radius: Self.radius * (site.isCrewed ? 0.035 : 0.02)),
                                     materials: [UnlitMaterial(color: signal)])
             light.name = site.id
             light.position = Self.surfacePoint(lat: site.lat, lon: site.lon, lift: 1.01)
-            light.addChild(ModelEntity(mesh: .generateSphere(radius: Self.radius * 0.07), materials: [haloMaterial]))
+            if site.isCrewed {
+                light.addChild(ModelEntity(mesh: .generateSphere(radius: Self.radius * 0.07), materials: [haloMaterial]))
+            }
             // Generous tap target so a finger can hit a 7 mm light.
             light.components.set(CollisionComponent(shapes: [.generateSphere(radius: Self.radius * 0.12)]))
             light.isEnabled = false

@@ -10,6 +10,12 @@ struct Localized: Codable, Hashable, Sendable {
     }
 }
 
+/// crewed: an Apollo landing (one of the six lights); robotic: a lander or rover;
+/// impact: a crater a spacecraft made on purpose.
+enum SiteKind: String, Codable, Hashable, Sendable {
+    case crewed, robotic, impact
+}
+
 /// A place where human equipment rests. Mirrors a row of `public.sites`.
 struct LandingSite: Codable, Identifiable, Hashable, Sendable {
     struct Photo: Codable, Hashable, Sendable {
@@ -19,6 +25,7 @@ struct LandingSite: Codable, Identifiable, Hashable, Sendable {
 
     let id: String
     let body: String
+    let kind: SiteKind
     let mission: String
     let missionOrder: Int
     let label: String
@@ -34,9 +41,13 @@ struct LandingSite: Codable, Identifiable, Hashable, Sendable {
     let leftBehind: [Localized]
     let story: Localized
     let photo: Photo?
+    /// Bundled USDZ (Resources/Models/<model>.usdz) that can be placed in AR.
+    let model: String?
+
+    var isCrewed: Bool { kind == .crewed }
 
     enum CodingKeys: String, CodingKey {
-        case id, body, mission, label, lander, region, lat, lon, story, photo
+        case id, body, kind, mission, label, lander, region, lat, lon, story, photo, model
         case missionOrder = "mission_order"
         case landedAt = "landed_at"
         case crewSurface = "crew_surface"
@@ -63,6 +74,8 @@ struct SitesFile: Decodable {
         let leftBehind: [Localized]
         let story: Localized
         let photo: LandingSite.Photo?
+        let kind: SiteKind?
+        let model: String?
     }
 
     let body: String
@@ -71,11 +84,11 @@ struct SitesFile: Decodable {
     var landingSites: [LandingSite] {
         sites.map {
             LandingSite(
-                id: $0.id, body: body, mission: $0.mission, missionOrder: $0.order,
+                id: $0.id, body: body, kind: $0.kind ?? .crewed, mission: $0.mission, missionOrder: $0.order,
                 label: $0.label, lander: $0.lander, region: $0.region, landedAt: $0.landedAt,
                 crewSurface: $0.crew.surface, crewOrbit: $0.crew.orbit,
                 lat: $0.coordinates.lat, lon: $0.coordinates.lon,
-                leftBehind: $0.leftBehind, story: $0.story, photo: $0.photo
+                leftBehind: $0.leftBehind, story: $0.story, photo: $0.photo, model: $0.model
             )
         }
     }

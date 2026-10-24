@@ -6,6 +6,7 @@ struct StoryCardView: View {
     /// The one primary action, shown only when set.
     var onSeeOnMoon: (() -> Void)?
     @Environment(SitesStore.self) private var store
+    @State private var placingModel = false
 
     var body: some View {
         ScrollView {
@@ -34,8 +35,10 @@ struct StoryCardView: View {
                     .padding(.top, Spacing.s3)
 
                 VStack(spacing: 0) {
-                    meta(tr("Lander", "Módulo"), site.lander)
-                    meta(tr("Crew", "Tripulación"), site.crewSurface.joined(separator: ", "))
+                    meta(site.isCrewed ? tr("Lander", "Módulo") : tr("Spacecraft", "Nave"), site.lander)
+                    if !site.crewSurface.isEmpty {
+                        meta(tr("Crew", "Tripulación"), site.crewSurface.joined(separator: ", "))
+                    }
                     meta(tr("Region", "Región"), site.region.current)
                     Rectangle().fill(Color.line).frame(height: 1)
                 }
@@ -59,6 +62,12 @@ struct StoryCardView: View {
                     }
                 }
 
+                if site.model != nil {
+                    Button(tr("See it in your space", "Verlo en tu espacio")) { placingModel = true }
+                        .buttonStyle(.secondary)
+                        .padding(.top, Spacing.s3)
+                }
+
                 if let onSeeOnMoon {
                     Button(tr("See it on the Moon", "Verlo en la Luna"), action: onSeeOnMoon)
                         .buttonStyle(.primary)
@@ -68,6 +77,7 @@ struct StoryCardView: View {
             .padding(Spacing.s6)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .fullScreenCover(isPresented: $placingModel) { ModelPlacementView(site: site) }
     }
 
     private func meta(_ key: String, _ value: String) -> some View {

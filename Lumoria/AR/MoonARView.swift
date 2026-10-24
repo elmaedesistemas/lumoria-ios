@@ -20,6 +20,7 @@ final class MoonARController {
     func placeHere() { coordinator?.confirmPlacement() }
     func move() { coordinator?.startPlacing() }
     func placeInFront() { coordinator?.placeInFront() }
+    func setRealSize(_ real: Bool) { coordinator?.setRealSize(real) }
 }
 
 /// The 3D Moon in an ARView.
@@ -31,13 +32,15 @@ struct MoonARView: UIViewRepresentable {
 
     let sites: [LandingSite]
     var mode: Mode
+    /// What to place; the Moon with `sites` when nil.
+    var content: PlaceableScene?
     var selectedID: String?
     var interactive = true
     var controller: MoonARController?
     var onSelect: (LandingSite) -> Void = { _ in }
     var onStatus: (MoonARStatus) -> Void = { _ in }
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator { Coordinator(scene: content ?? MoonScene(sites: sites)) }
 
     func makeUIView(context: Context) -> ARView {
         let coordinator = context.coordinator
@@ -67,7 +70,7 @@ struct MoonARView: UIViewRepresentable {
             arView.addGestureRecognizer(UIPinchGestureRecognizer(target: coordinator, action: #selector(Coordinator.pinched(_:))))
         }
 
-        Task { await coordinator.scene.build(sites: sites) }
+        Task { await coordinator.scene.prepare() }
         return arView
     }
 
@@ -85,15 +88,15 @@ struct MoonARView: UIViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, ARSessionDelegate {
         static let previewFOV: Float = 30
-        static let previewCamera: SIMD3<Float> = [0, 0, 0.42]
 
         var parent: MoonARView?
         weak var arView: ARView?
-        let scene = MoonScene()
+        let scene: PlaceableScene
+        private var previewCamera: SIMD3<Float> { [0, 0, scene.previewDistance] }
         fileprivate var updates: Cancellable?
 
         private let worldAnchor = AnchorEntity(world: .zero)
-        private let reticle = MoonARView.makeReticle()
+        private let reticle: Entity
         private var placing = true
         private var status: MoonARStatus?
         /// Turns the near side toward the viewer; set when the Moon is placed.
@@ -103,6 +106,11 @@ struct MoonARView: UIViewRepresentable {
         private var size: Float = 1
         private var panStart: (yaw: Float, pitch: Float) = (0, 0)
         private var pinchStart: Float = 1
+
+        init(scene: PlaceableScene) {
+            self.scene = scene
+            reticle = MoonARView.makeReticle(radius: scene.footprint)
+        }
         /// Apple's "move iPhone" guide, shown once at the start and never again after a surface is found.
         private var coaching: ARCoachingOverlayView?
 
@@ -153,7 +161,7 @@ struct MoonARView: UIViewRepresentable {
             // Fit the Moon to the view's width, whatever its height.
             camera.camera.fieldOfViewOrientation = .horizontal
             camera.camera.fieldOfViewInDegrees = Self.previewFOV
-            camera.position = Self.previewCamera
+            camera.position = previewCamera
             cameraAnchor.addChild(camera)
             cameraAnchor.addChild(scene.root)
             arView.scene.addAnchor(cameraAnchor)
@@ -184,7 +192,7 @@ struct MoonARView: UIViewRepresentable {
         }
 
         private func setMoon(onSurfaceAt point: SIMD3<Float>) {
-            scene.root.position = point + [0, MoonScene.radius * 1.5 * size, 0]
+            scene.root.position = point + [0, scene.restHeight * size, 0]
             scene.root.isEnabled = true
             faceCamera()
         }
@@ -232,7 +240,7 @@ struct MoonARView: UIViewRepresentable {
         }
 
         func applyPose() {
-            scene.apply(yaw: facingYaw + yaw, pitch: pitch, selectedID: parent?.selectedID)
+            scene.apply(yaw: facingYaw + yaw, pitch: scene.allowsTilt ? pitch : 0, selectedID: parent?.selectedID)
             scene.root.scale = .init(repeating: size)
         }
 
@@ -254,17 +262,28 @@ struct MoonARView: UIViewRepresentable {
             if gesture.state == .began { panStart = (yaw, pitch) }
             let t = gesture.translation(in: gesture.view)
             yaw = panStart.yaw + Float(t.x) * 0.008
-            pitch = max(-1.2, min(1.2, panStart.pitch + Float(t.y) * 0.008))
+            if scene.allowsTilt { pitch = max(-1.2, min(1.2, panStart.pitch + Float(t.y) * 0.008)) }
             applyPose()
         }
 
         @objc func pinched(_ gesture: UIPinchGestureRecognizer) {
             guard arView?.cameraMode == .ar else { return }
             if gesture.state == .began { pinchStart = size }
-            let surface = scene.root.position.y - MoonScene.radius * 1.5 * size
-            size = max(0.4, min(3, pinchStart * Float(gesture.scale)))
-            // Keep the Moon resting the same distance above its surface as it grows.
-            scene.root.position.y = surface + MoonScene.radius * 1.5 * size
+            let range = scene.sizeRange
+            resize(to: min(range.upperBound, max(range.lowerBound, pinchStart * Float(gesture.scale))))
+        }
+
+        /// Switches between the starting size and the object's real size.
+        func setRealSize(_ real: Bool) {
+            guard let realSize = scene.realSize else { return }
+            resize(to: real ? realSize : 1)
+        }
+
+        /// Changes size while keeping the object resting on the same surface.
+        private func resize(to newSize: Float) {
+            let surface = scene.root.position.y - scene.restHeight * size
+            size = newSize
+            scene.root.position.y = surface + scene.restHeight * size
             applyPose()
         }
 
@@ -278,7 +297,7 @@ struct MoonARView: UIViewRepresentable {
                 (1 - Float(point.y) / h * 2) * tanHalf * h / w,
                 -1
             ))
-            let origin = Self.previewCamera
+            let origin = previewCamera
             let reach = MoonScene.radius * 0.12
             return scene.visibleLights
                 .filter { $0.position.z > 0 }  // Only lights on the side facing the camera.
@@ -308,14 +327,14 @@ struct MoonARView: UIViewRepresentable {
         }
     }
 
-    /// A flat signal disc that marks where the Moon will go.
+    /// A flat signal disc that marks where the object will go.
     @MainActor
-    static func makeReticle() -> Entity {
+    static func makeReticle(radius: Float) -> Entity {
         let signal = UIColor(red: 1, green: 0.42, blue: 0.10, alpha: 1)
         var fill = UnlitMaterial(color: signal)
         fill.blending = .transparent(opacity: 0.25)
-        let disc = ModelEntity(mesh: .generateCylinder(height: 0.001, radius: MoonScene.radius * 0.9), materials: [fill])
-        let dot = ModelEntity(mesh: .generateCylinder(height: 0.002, radius: MoonScene.radius * 0.06),
+        let disc = ModelEntity(mesh: .generateCylinder(height: 0.001, radius: radius), materials: [fill])
+        let dot = ModelEntity(mesh: .generateCylinder(height: 0.002, radius: radius * 0.07),
                               materials: [UnlitMaterial(color: signal)])
         disc.addChild(dot)
         return disc

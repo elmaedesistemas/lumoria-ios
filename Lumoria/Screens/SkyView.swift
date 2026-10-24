@@ -218,14 +218,16 @@ struct SkyMoonDisk: View {
                     ctx.fill(litPath(center: c, radius: r), with: .color(.regolith))
                     ctx.stroke(disk, with: .color(.dust), lineWidth: 1)
 
-                    let dot = r * 0.05
                     for (site, p) in points {
+                        let dot = r * (site.isCrewed ? 0.05 : 0.03)
                         let lit = (sky.siteSunElevation[site.id] ?? -90) > 0
                         let rect = CGRect(x: p.x - dot, y: p.y - dot, width: 2 * dot, height: 2 * dot)
-                        if lit {
+                        if lit && site.isCrewed {
                             let halo = dot * 2.2
                             ctx.fill(Path(ellipseIn: CGRect(x: p.x - halo, y: p.y - halo, width: 2 * halo, height: 2 * halo)),
                                      with: .color(.signal.opacity(0.18)))
+                            ctx.fill(Path(ellipseIn: rect), with: .color(.signal))
+                        } else if lit {
                             ctx.fill(Path(ellipseIn: rect), with: .color(.signal))
                         } else {
                             ctx.stroke(Path(ellipseIn: rect), with: .color(.signal), lineWidth: 2)

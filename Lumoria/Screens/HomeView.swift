@@ -23,8 +23,8 @@ struct HomeView: View {
                         .style(.display)
                         .foregroundStyle(Color.ink)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(tr("Six places where people landed, and what is still there.",
-                            "Seis lugares donde alunizaron personas, y lo que sigue ahí."))
+                    Text(tr("Six Apollo landings, the probes that came before and after, and what is still there.",
+                            "Seis alunizajes Apolo, las sondas que llegaron antes y después, y lo que sigue ahí."))
                         .style(.bodySmall)
                         .foregroundStyle(Color.inkMuted)
                 }
@@ -49,7 +49,7 @@ struct HomeView: View {
 
     private var header: some View {
         HStack(spacing: Spacing.s2) {
-            MoonDisk(sites: store.sites).frame(width: 22, height: 22)
+            MoonDisk(sites: store.sites.filter(\.isCrewed)).frame(width: 22, height: 22)
             Text("Lumoria").style(.wordmarkSmall).foregroundStyle(Color.ink)
             Spacer()
             Button { path.append(.archive) } label: {
@@ -71,7 +71,7 @@ struct HomeView: View {
             }
             VStack(alignment: .leading, spacing: Spacing.s1) {
                 Text(tr("Near side", "Cara visible")).style(.label).foregroundStyle(Color.inkMuted)
-                Text("\(store.sites.count) \(tr("sites", "sitios")) · 1969–1972")
+                Text("\(store.sites.count) \(tr("sites", "sitios")) · 1964–2013")
                     .style(.label).foregroundStyle(Color.inkMuted)
             }
             .padding(.horizontal, Spacing.s4)

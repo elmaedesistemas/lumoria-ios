@@ -27,18 +27,15 @@ struct ArchiveView: View {
                         .style(.label)
                         .foregroundStyle(Color.inkMuted)
                         .padding(.bottom, Spacing.s2)
-                    Text(tr("Every place people walked on the Moon.", "Cada lugar donde caminaron personas en la Luna."))
+                    Text(tr("Everything we left on the Moon.", "Todo lo que dejamos en la Luna."))
                         .style(.display)
                         .foregroundStyle(Color.ink)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.bottom, Spacing.s8)
 
-                    Rectangle().fill(Color.line).frame(height: 1)
-                    ForEach(store.sites) { site in
-                        Button { openSite = site } label: { ArchiveRow(site: site, selected: false) }
-                            .buttonStyle(.plain)
-                        Rectangle().fill(Color.line).frame(height: 1)
-                    }
+                    section(tr("Apollo landings", "Alunizajes Apolo"), store.sites.filter(\.isCrewed))
+                    section(tr("Probes, rovers and impacts", "Sondas, vehículos e impactos"),
+                            store.sites.filter { !$0.isCrewed })
                 }
                 .padding(.horizontal, Spacing.s4)
                 .padding(.bottom, Spacing.s8)
@@ -57,19 +54,38 @@ struct ArchiveView: View {
     }
 }
 
+private extension ArchiveView {
+    @ViewBuilder
+    func section(_ title: String, _ sites: [LandingSite]) -> some View {
+        if !sites.isEmpty {
+            Text("\(title) · \(sites.count)")
+                .style(.label)
+                .foregroundStyle(Color.inkMuted)
+                .padding(.top, Spacing.s6)
+                .padding(.bottom, Spacing.s2)
+            Rectangle().fill(Color.line).frame(height: 1)
+            ForEach(Array(sites.enumerated()), id: \.element.id) { index, site in
+                Button { openSite = site } label: { ArchiveRow(site: site, number: index + 1) }
+                    .buttonStyle(.plain)
+                Rectangle().fill(Color.line).frame(height: 1)
+            }
+        }
+    }
+}
+
 private struct ArchiveRow: View {
     let site: LandingSite
-    let selected: Bool
+    let number: Int
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.s4) {
-            Text(String(format: "%02d", site.missionOrder))
+            Text(String(format: "%02d", number))
                 .style(.index)
                 .foregroundStyle(Color.signalText)
                 .frame(width: 32, alignment: .leading)
             VStack(alignment: .leading, spacing: Spacing.s1) {
                 Text(site.mission).font(TextStyle.heading.font).foregroundStyle(Color.ink)
-                Text("\(site.region.current) · \(site.lander)")
+                Text("\(site.region.current) · \(site.landedAt.formatted(.dateTime.year()))")
                     .style(.bodySmall).foregroundStyle(Color.ink)
                 Text(site.coordinateText).style(.label).font(.custom("IBMPlexMono-Medium", size: 12))
                     .foregroundStyle(Color.inkMuted)

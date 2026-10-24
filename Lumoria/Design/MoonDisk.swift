@@ -25,17 +25,21 @@ struct MoonDisk: View {
                              with: .color(.regolith))
                     ctx.fill(maria(center: center, radius: radius), with: .color(.regolithShade))
 
+                    // The trail joins only the six Apollo lights: that's the brand symbol.
                     var trail = Path()
-                    trail.addLines(Array(points.prefix(visibleCount)))
+                    trail.addLines(zip(sites, points).prefix(visibleCount).filter { $0.0.isCrewed }.map(\.1))
                     ctx.stroke(trail, with: .color(.dust),
                                style: StrokeStyle(lineWidth: max(1, radius / 90), dash: [radius / 45, radius / 36]))
 
                     for (site, p) in zip(sites, points).prefix(visibleCount) {
                         let isSelected = site.id == selectedID
-                        let dot = isSelected ? light * 1.4 : light
+                        let base = site.isCrewed ? light : light * 0.55
+                        let dot = isSelected ? base * 1.4 : base
                         let halo = light * 2.2
-                        ctx.fill(Path(ellipseIn: CGRect(x: p.x - halo, y: p.y - halo, width: halo * 2, height: halo * 2)),
-                                 with: .color(.signal.opacity(0.18)))
+                        if site.isCrewed {
+                            ctx.fill(Path(ellipseIn: CGRect(x: p.x - halo, y: p.y - halo, width: halo * 2, height: halo * 2)),
+                                     with: .color(.signal.opacity(0.18)))
+                        }
                         ctx.fill(Path(ellipseIn: CGRect(x: p.x - dot, y: p.y - dot, width: dot * 2, height: dot * 2)),
                                  with: .color(.signal))
                         if isSelected {

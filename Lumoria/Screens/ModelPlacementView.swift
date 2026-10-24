@@ -7,14 +7,16 @@ struct ModelPlacementView: View {
     @State private var scene: ModelScene?
     @State private var controller = MoonARController()
     @State private var status: MoonARStatus = .starting
-    @State private var realSize = false
+    /// Size as a multiple of table size (1) up to real size.
+    @State private var size: Float = 1
     @State private var ready = false
 
     var body: some View {
         ZStack {
             Color.space.ignoresSafeArea()
             if let scene {
-                MoonARView(sites: [], mode: .table, content: scene, controller: controller, onStatus: { status = $0 })
+                MoonARView(sites: [], mode: .table, content: scene, controller: controller,
+                           onStatus: { status = $0 }, onSize: { size = $0 })
                     .ignoresSafeArea()
             }
             if !ready {
@@ -34,12 +36,7 @@ struct ModelPlacementView: View {
                         .frame(height: 32)
                         .background(Color.surface, in: Capsule())
                     if status == .placed {
-                        Button {
-                            // Back to table size first, so the reticle places a small model.
-                            controller.setRealSize(false)
-                            realSize = false
-                            controller.move()
-                        } label: {
+                        Button { controller.move() } label: {
                             Text(tr("Move", "Mover")).font(TextStyle.bodyStrong.font).foregroundStyle(Color.ink)
                                 .padding(.horizontal, Spacing.s3)
                                 .frame(height: 32)
@@ -51,6 +48,10 @@ struct ModelPlacementView: View {
                 .padding(.horizontal, Spacing.s4)
                 .padding(.top, Spacing.s2)
                 Spacer()
+                if status == .placed, let info = scene?.info {
+                    sizeBar(info)
+                        .padding(.horizontal, Spacing.s4)
+                }
                 panel
             }
         }
@@ -82,10 +83,6 @@ struct ModelPlacementView: View {
                     Button(tr("Place it here", "Colocar aquí")) { controller.placeHere() }
                         .buttonStyle(.primary)
                 case .placed:
-                    HStack(spacing: Spacing.s2) {
-                        sizeTab(tr("Table", "Mesa"), selected: !realSize) { realSize = false }
-                        sizeTab(String(format: tr("Real · %.1f m", "Real · %.1f m"), info.realHeight), selected: realSize) { realSize = true }
-                    }
                     if let note = info.note {
                         Text(note.current).style(.bodySmall).foregroundStyle(Color.inkMuted)
                     }
@@ -105,16 +102,46 @@ struct ModelPlacementView: View {
         .padding(Spacing.s4)
         .background(Color.surface, in: RoundedRectangle(cornerRadius: Radius.lg))
         .padding(Spacing.s4)
-        .onChange(of: realSize) { _, real in controller.setRealSize(real) }
     }
 
-    private func sizeTab(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+    /// Floating over the camera: Table and Real jump to either end, the slider sets anything between.
+    /// The slider is logarithmic, so the small sizes aren't squeezed into its first few points.
+    private func sizeBar(_ info: ModelScene.Info) -> some View {
+        let real = info.realHeight / ModelScene.tableHeight
+        let height = ModelScene.tableHeight * size
+        let ratio = info.realHeight / height
+        let scaleText = ratio < 1.05 ? "1:1" : "1:\(Int(ratio.rounded()))"
+        let heightText = height < 1 ? "\(Int((height * 100).rounded())) cm" : String(format: "%.1f m", height)
+        let position = Binding<Double>(
+            get: { Double(log(max(size, 1)) / log(real)) },
+            set: { controller.setSize(exp(Float($0) * log(real))) }
+        )
+        return VStack(spacing: Spacing.s2) {
+            Text("\(tr("Scale", "Escala")) \(scaleText) · \(heightText)")
+                .style(.label)
+                .foregroundStyle(Color.ink)
+            HStack(spacing: Spacing.s3) {
+                sizeButton(tr("Table", "Mesa"), selected: size <= 1.01) { controller.setSize(1) }
+                Slider(value: position, in: 0...1)
+                    .tint(Color.signal)
+                    .accessibilityLabel(tr("Model size", "Tamaño del modelo"))
+                    .accessibilityValue("\(scaleText), \(heightText)")
+                sizeButton(tr("Real", "Real"), selected: size >= real * 0.99) { controller.setSize(real) }
+            }
+        }
+        .padding(.horizontal, Spacing.s3)
+        .padding(.vertical, Spacing.s3)
+        .background(Color.surface.opacity(0.85), in: RoundedRectangle(cornerRadius: Radius.lg))
+    }
+
+    private func sizeButton(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .font(TextStyle.bodyStrong.font)
                 .foregroundStyle(selected ? Color.onSignal : Color.ink)
-                .frame(maxWidth: .infinity, minHeight: 40)
-                .background(selected ? Color.signal : Color.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.md))
+                .padding(.horizontal, Spacing.s3)
+                .frame(minHeight: 36)
+                .background(selected ? Color.signal : Color.surfaceRaised, in: Capsule())
         }
         .buttonStyle(.plain)
     }

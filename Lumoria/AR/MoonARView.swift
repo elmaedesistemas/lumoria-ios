@@ -20,7 +20,7 @@ final class MoonARController {
     func placeHere() { coordinator?.confirmPlacement() }
     func move() { coordinator?.startPlacing() }
     func placeInFront() { coordinator?.placeInFront() }
-    func setRealSize(_ real: Bool) { coordinator?.setRealSize(real) }
+    func setSize(_ size: Float) { coordinator?.setSize(size) }
 }
 
 /// The 3D Moon in an ARView.
@@ -39,6 +39,8 @@ struct MoonARView: UIViewRepresentable {
     var controller: MoonARController?
     var onSelect: (LandingSite) -> Void = { _ in }
     var onStatus: (MoonARStatus) -> Void = { _ in }
+    /// The object's size as a multiple of its starting size, after a pinch or `setSize`.
+    var onSize: (Float) -> Void = { _ in }
 
     func makeCoordinator() -> Coordinator { Coordinator(scene: content ?? MoonScene(sites: sites)) }
 
@@ -107,8 +109,8 @@ struct MoonARView: UIViewRepresentable {
         private var size: Float = 1
         private var panStart: (yaw: Float, pitch: Float) = (0, 0)
         private var pinchStart: Float = 1
-        /// Where the object sat at table size, to return there from real size.
-        private var tablePosition: SIMD3<Float>?
+        /// The surface point where a model was placed; growing it moves it away from there.
+        private var placedSpot: SIMD3<Float>?
         /// The site the Moon last turned toward, and the turn in progress.
         private var focusedID: String?
         private var focusTurn: Cancellable?
@@ -260,6 +262,13 @@ struct MoonARView: UIViewRepresentable {
             placing = true
             yaw = 0
             pitch = 0
+            if scene.realSize != nil {
+                // A model goes back to table size so the reticle places something small.
+                placedSpot = nil
+                size = 1
+                applyPose()
+                parent?.onSize(size)
+            }
             report(.searching)
         }
 
@@ -318,46 +327,59 @@ struct MoonARView: UIViewRepresentable {
         @objc func pinched(_ gesture: UIPinchGestureRecognizer) {
             guard arView?.cameraMode == .ar else { return }
             if gesture.state == .began { pinchStart = size }
-            let range = scene.sizeRange
-            resize(to: min(range.upperBound, max(range.lowerBound, pinchStart * Float(gesture.scale))))
+            setSize(pinchStart * Float(gesture.scale))
         }
 
-        /// Switches between the starting size and the object's real size.
-        func setRealSize(_ real: Bool) {
-            guard let realSize = scene.realSize else { return }
-            guard real else {
-                resize(to: 1)
-                if let tablePosition { scene.root.position = tablePosition }
-                tablePosition = nil
+        /// Sets the size as a multiple of the starting size, within the scene's limits.
+        /// A model in AR also steps back from the viewer as it grows, and stands on the floor once it's tall.
+        func setSize(_ newSize: Float) {
+            let range = scene.sizeRange
+            let clamped = min(range.upperBound, max(range.lowerBound, newSize))
+            guard scene.realSize != nil, !placing, let arView, arView.cameraMode == .ar else {
+                resize(to: clamped)
+                parent?.onSize(size)
                 return
             }
-            tablePosition = scene.root.position
-            resize(to: realSize)
-            placeOnFloorAhead()
+            if placedSpot == nil { placedSpot = scene.root.position - [0, scene.restHeight * size, 0] }
+            size = clamped
+            keepClearOfViewer(in: arView)
+            applyPose()
+            parent?.onSize(size)
         }
 
-        /// Moves a real-size object onto the floor in front of the viewer, far enough
-        /// that its nearest edge is a couple of meters away instead of around them.
-        private func placeOnFloorAhead() {
-            guard let arView, arView.cameraMode == .ar else { return }
+        private func keepClearOfViewer(in arView: ARView) {
+            guard let spot = placedSpot else { return }
             let camera = arView.cameraTransform
-            let forward = camera.matrix.columns.2
-            var ahead = SIMD3<Float>(-forward.x, 0, -forward.z)
-            ahead = simd_length(ahead) > 0.01 ? simd_normalize(ahead) : [0, 0, -1]
-
             let local = scene.root.visualBounds(relativeTo: scene.root)
             let radius = max(local.extents.x, local.extents.z) / 2 * size
-            let target = camera.translation + ahead * (radius + 2)
+            let height = local.extents.y * size
 
-            // The floor under that spot; if ARKit hasn't seen it, assume the phone is held ~1.4 m up.
-            let surface = scene.root.position.y - scene.restHeight * size
-            var floor = min(surface, camera.translation.y - 1.4)
-            let down = ARRaycastQuery(origin: [target.x, camera.translation.y, target.z], direction: [0, -1, 0],
-                                      allowing: .estimatedPlane, alignment: .horizontal)
-            if let hit = arView.session.raycast(down).first { floor = hit.worldTransform.columns.3.y }
+            // The gap to the nearest edge grows with the object, up to 1.5 m at real size.
+            var away = SIMD3<Float>(spot.x - camera.translation.x, 0, spot.z - camera.translation.z)
+            let distance = simd_length(away)
+            if distance > 0.01 {
+                away /= distance
+            } else {
+                let forward = camera.matrix.columns.2
+                away = simd_normalize(SIMD3<Float>(-forward.x, 0, -forward.z) + [0, 0, 0.0001])
+            }
+            let needed = radius + min(radius, 1.5)
+            var target = spot
+            if distance < needed {
+                target = camera.translation + away * needed
+                target.y = spot.y
+            }
 
-            scene.root.position = [target.x, floor + scene.restHeight * size, target.z]
-            faceCamera()
+            // Taller than a table can hold: stand it on the floor ARKit finds there,
+            // or ~1.4 m below the phone if it hasn't seen the floor yet.
+            if height > 1 {
+                var floor = min(spot.y, camera.translation.y - 1.4)
+                let down = ARRaycastQuery(origin: [target.x, camera.translation.y, target.z], direction: [0, -1, 0],
+                                          allowing: .estimatedPlane, alignment: .horizontal)
+                if let hit = arView.session.raycast(down).first { floor = hit.worldTransform.columns.3.y }
+                target.y = floor
+            }
+            scene.root.position = target + [0, scene.restHeight * size, 0]
         }
 
         /// Changes size while keeping the object resting on the same surface.

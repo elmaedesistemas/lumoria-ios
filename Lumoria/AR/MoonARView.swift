@@ -100,6 +100,9 @@ struct MoonARView: UIViewRepresentable {
 
         private let worldAnchor = AnchorEntity(world: .zero)
         private let reticle: Entity
+        /// A soft dark disc on the surface under the object, so it reads as standing there.
+        private let shadow = MoonARView.makeContactShadow()
+        private var shadowRadius: Float?
         private var placing = true
         private var status: MoonARStatus?
         /// Turns the near side toward the viewer; set when the Moon is placed.
@@ -134,6 +137,12 @@ struct MoonARView: UIViewRepresentable {
 
             let config = ARWorldTrackingConfiguration()
             config.planeDetection = [.horizontal]
+            // LiDAR finds surfaces in a moment, even in dim rooms and on plain floors.
+            if ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) {
+                config.sceneReconstruction = .mesh
+            }
+            // Light and reflect the model with the room around it.
+            config.environmentTexturing = .automatic
             arView.session.delegate = self
             arView.session.run(config)
 
@@ -141,7 +150,9 @@ struct MoonARView: UIViewRepresentable {
             scene.root.isEnabled = false
             worldAnchor.addChild(scene.root)
             worldAnchor.addChild(reticle)
+            worldAnchor.addChild(shadow)
             reticle.isEnabled = false
+            shadow.isEnabled = false
             arView.scene.addAnchor(worldAnchor)
 
             let coaching = ARCoachingOverlayView()
@@ -158,7 +169,10 @@ struct MoonARView: UIViewRepresentable {
             self.coaching = coaching
 
             updates = arView.scene.subscribe(to: SceneEvents.Update.self) { [weak self] _ in
-                MainActor.assumeIsolated { self?.trackReticle() }
+                MainActor.assumeIsolated {
+                    self?.trackReticle()
+                    self?.updateShadow()
+                }
             }
             report(.starting)
 
@@ -195,6 +209,19 @@ struct MoonARView: UIViewRepresentable {
             guard let floorY else { return nil }
             return arView.raycast(from: point, allowing: .existingPlaneInfinite, alignment: .horizontal)
                 .first { abs($0.worldTransform.columns.3.y - floorY) < 0.05 }
+        }
+
+        private func updateShadow() {
+            shadow.isEnabled = scene.root.isEnabled
+            guard shadow.isEnabled else { return }
+            if shadowRadius == nil {
+                // The model loads after the scene starts; measure it once it has a shape.
+                let bounds = scene.root.visualBounds(relativeTo: scene.root)
+                if !bounds.isEmpty { shadowRadius = max(bounds.extents.x, bounds.extents.z) / 2 }
+            }
+            let radius = (shadowRadius ?? scene.footprint) * size
+            shadow.position = scene.root.position - [0, scene.restHeight * size - 0.002, 0]
+            shadow.scale = [radius, 1, radius]
         }
 
         private func trackReticle() {
@@ -473,6 +500,31 @@ struct MoonARView: UIViewRepresentable {
                 report(denied ? .cameraDenied : .unsupported)
             }
         }
+    }
+
+    /// A unit-radius disc that fades from soft black at the center to clear at the edge.
+    @MainActor
+    static func makeContactShadow() -> ModelEntity {
+        let size = 128
+        var material = UnlitMaterial(color: .black)
+        if let context = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8, bytesPerRow: 0,
+                                   space: CGColorSpaceCreateDeviceRGB(),
+                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+           let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                                     colors: [UIColor(white: 0, alpha: 0.55).cgColor,
+                                              UIColor(white: 0, alpha: 0.25).cgColor,
+                                              UIColor(white: 0, alpha: 0).cgColor] as CFArray,
+                                     locations: [0, 0.55, 1]) {
+            let center = CGPoint(x: size / 2, y: size / 2)
+            context.drawRadialGradient(gradient, startCenter: center, startRadius: 0,
+                                       endCenter: center, endRadius: CGFloat(size / 2), options: [])
+            if let image = context.makeImage(),
+               let texture = try? TextureResource(image: image, options: .init(semantic: .color)) {
+                material.color = .init(tint: .white, texture: .init(texture))
+            }
+        }
+        material.blending = .transparent(opacity: .init(floatLiteral: 1))
+        return ModelEntity(mesh: .generatePlane(width: 2, depth: 2), materials: [material])
     }
 
     /// A flat signal disc that marks where the object will go.

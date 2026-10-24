@@ -29,9 +29,20 @@ final class SitesDataTests: XCTestCase {
 
     func testEveryModelIsInTheCatalogAndBundle() throws {
         for site in try sites() {
-            guard let model = site.model else { continue }
-            let info = try XCTUnwrap(ModelScene.catalog[model], site.id)
-            XCTAssertNotNil(Bundle.main.url(forResource: info.file, withExtension: "usdz"), model)
+            for model in site.models {
+                let info = try XCTUnwrap(ModelScene.catalog[model], site.id)
+                XCTAssertNotNil(Bundle.main.url(forResource: info.file, withExtension: "usdz"), model)
+            }
+        }
+    }
+
+    func testApolloRoverSitesShowTheRoverFirst() throws {
+        let all = try sites()
+        for id in ["apollo-15", "apollo-16", "apollo-17"] {
+            XCTAssertEqual(all.first { $0.id == id }?.models.first, "lunar-rover", id)
+        }
+        for id in ["apollo-11", "apollo-12", "apollo-14"] {
+            XCTAssertEqual(all.first { $0.id == id }?.models, ["lunar-module"], id)
         }
     }
 

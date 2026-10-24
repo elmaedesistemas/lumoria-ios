@@ -1,9 +1,11 @@
 import SwiftUI
 
 /// Places a site's spacecraft model on a surface around you, at table size or real size.
+/// When the site has several models (Apollo 15-17: rover and lunar module) a switcher picks one.
 struct ModelPlacementView: View {
     let site: LandingSite
     @Environment(\.dismiss) private var dismiss
+    @State private var modelName: String?
     @State private var scene: ModelScene?
     @State private var controller = MoonARController()
     @State private var status: MoonARStatus = .starting
@@ -18,6 +20,8 @@ struct ModelPlacementView: View {
             if let scene {
                 MoonARView(sites: [], mode: .table, content: scene, controller: controller,
                            onStatus: { status = $0 }, onSize: { size = $0 })
+                    // A new model gets a new AR session, placed from scratch.
+                    .id(scene.info.file)
                     .ignoresSafeArea()
             }
             if !ready {
@@ -52,6 +56,11 @@ struct ModelPlacementView: View {
                 }
                 .padding(.horizontal, Spacing.s4)
                 .padding(.top, Spacing.s2)
+                if site.models.count > 1 {
+                    modelSwitcher
+                        .padding(.horizontal, Spacing.s4)
+                        .padding(.top, Spacing.s3)
+                }
                 Spacer()
                 if status == .placed, let info = scene?.info {
                     sizeBar(info)
@@ -60,8 +69,14 @@ struct ModelPlacementView: View {
                 panel
             }
         }
-        .task {
-            if scene == nil, let model = site.model { scene = ModelScene(model: model) }
+        .task(id: modelName) {
+            guard let name = modelName ?? site.models.first else { return }
+            if modelName == nil { modelName = name; return }
+            ready = false
+            size = 1
+            status = .starting
+            showMesh = false
+            scene = ModelScene(model: name)
             await scene?.prepare()
             ready = true
         }
@@ -112,8 +127,8 @@ struct ModelPlacementView: View {
     /// Floating over the camera: Table and Real jump to either end, the slider sets anything between.
     /// The slider is logarithmic, so the small sizes aren't squeezed into its first few points.
     private func sizeBar(_ info: ModelScene.Info) -> some View {
-        let real = info.realHeight / ModelScene.tableHeight
-        let height = ModelScene.tableHeight * size
+        let real = info.realHeight / info.tableHeight
+        let height = info.tableHeight * size
         let ratio = info.realHeight / height
         let scaleText = ratio < 1.05 ? "1:1" : "1:\(Int(ratio.rounded()))"
         let heightText = height < 1 ? "\(Int((height * 100).rounded())) cm" : String(format: "%.1f m", height)
@@ -137,6 +152,17 @@ struct ModelPlacementView: View {
         .padding(.horizontal, Spacing.s3)
         .padding(.vertical, Spacing.s3)
         .background(Color.surface.opacity(0.85), in: RoundedRectangle(cornerRadius: Radius.lg))
+    }
+
+    private var modelSwitcher: some View {
+        HStack(spacing: Spacing.s2) {
+            ForEach(site.models, id: \.self) { name in
+                if let info = ModelScene.catalog[name] {
+                    sizeButton(info.shortName.current, selected: name == modelName) { modelName = name }
+                }
+            }
+            Spacer(minLength: 0)
+        }
     }
 
     private func sizeButton(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {

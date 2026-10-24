@@ -62,7 +62,7 @@ struct StoryCardView: View {
                     }
                 }
 
-                if site.model != nil {
+                if !site.models.isEmpty {
                     Button(tr("See it in your space", "Verlo en tu espacio")) { placingModel = true }
                         .buttonStyle(.secondary)
                         .padding(.top, Spacing.s3)

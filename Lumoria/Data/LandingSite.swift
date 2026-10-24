@@ -41,13 +41,13 @@ struct LandingSite: Codable, Identifiable, Hashable, Sendable {
     let leftBehind: [Localized]
     let story: Localized
     let photo: Photo?
-    /// Bundled USDZ (Resources/Models/<model>.usdz) that can be placed in AR.
-    let model: String?
+    /// Bundled USDZ names (Resources/Models/<name>.usdz) that can be placed in AR, the first shown first.
+    let models: [String]
 
     var isCrewed: Bool { kind == .crewed }
 
     enum CodingKeys: String, CodingKey {
-        case id, body, kind, mission, label, lander, region, lat, lon, story, photo, model
+        case id, body, kind, mission, label, lander, region, lat, lon, story, photo, models
         case missionOrder = "mission_order"
         case landedAt = "landed_at"
         case crewSurface = "crew_surface"
@@ -75,7 +75,7 @@ struct SitesFile: Decodable {
         let story: Localized
         let photo: LandingSite.Photo?
         let kind: SiteKind?
-        let model: String?
+        let models: [String]?
     }
 
     let body: String
@@ -88,7 +88,7 @@ struct SitesFile: Decodable {
                 label: $0.label, lander: $0.lander, region: $0.region, landedAt: $0.landedAt,
                 crewSurface: $0.crew.surface, crewOrbit: $0.crew.orbit,
                 lat: $0.coordinates.lat, lon: $0.coordinates.lon,
-                leftBehind: $0.leftBehind, story: $0.story, photo: $0.photo, model: $0.model
+                leftBehind: $0.leftBehind, story: $0.story, photo: $0.photo, models: $0.models ?? []
             )
         }
     }

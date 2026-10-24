@@ -49,7 +49,9 @@
       },
       "photo": null,
       "kind": "crewed",
-      "model": "lunar-module"
+      "models": [
+        "lunar-module"
+      ]
     },
     {
       "id": "apollo-12",
@@ -93,7 +95,9 @@
       },
       "photo": null,
       "kind": "crewed",
-      "model": "lunar-module"
+      "models": [
+        "lunar-module"
+      ]
     },
     {
       "id": "apollo-14",
@@ -145,7 +149,9 @@
       },
       "photo": null,
       "kind": "crewed",
-      "model": "lunar-module"
+      "models": [
+        "lunar-module"
+      ]
     },
     {
       "id": "apollo-15",
@@ -193,7 +199,10 @@
       },
       "photo": null,
       "kind": "crewed",
-      "model": "lunar-module"
+      "models": [
+        "lunar-rover",
+        "lunar-module"
+      ]
     },
     {
       "id": "apollo-16",
@@ -241,7 +250,10 @@
       },
       "photo": null,
       "kind": "crewed",
-      "model": "lunar-module"
+      "models": [
+        "lunar-rover",
+        "lunar-module"
+      ]
     },
     {
       "id": "apollo-17",
@@ -285,7 +297,10 @@
       },
       "photo": null,
       "kind": "crewed",
-      "model": "lunar-module"
+      "models": [
+        "lunar-rover",
+        "lunar-module"
+      ]
     },
     {
       "id": "ranger-7",
@@ -318,7 +333,7 @@
         "es": "Un pequeño cráter marca donde el Ranger 7 chocó contra la Luna el 31 de julio de 1964, a propósito. En sus últimos 17 minutos envió 4308 fotos, las primeras vistas de cerca de la superficie, mucho más nítidas que cualquier telescopio en la Tierra. La llanura donde cayó se llamó Mare Cognitum, el Mar Conocido."
       },
       "photo": null,
-      "model": null
+      "models": []
     },
     {
       "id": "surveyor-1",
@@ -351,7 +366,7 @@
         "es": "La Surveyor 1 sigue de pie en el Océano de las Tormentas, donde se posó el 2 de junio de 1966, la primera nave estadounidense en aterrizar suavemente en la Luna. Su cámara envió más de 11 000 fotos. Demostró que el suelo podía sostener el peso de un módulo, algo que las tripulaciones Apolo iban a necesitar."
       },
       "photo": null,
-      "model": null
+      "models": []
     },
     {
       "id": "surveyor-3",
@@ -384,7 +399,7 @@
         "es": "La Surveyor 3 descansa dentro de un pequeño cráter en el Océano de las Tormentas. Al aterrizar en abril de 1967 sus motores no se apagaron y rebotó dos veces antes de quedarse quieta. Dos años y medio después el Apolo 12 alunizó a menos de 200 metros; Pete Conrad y Alan Bean caminaron hasta ella y le cortaron la cámara, que hoy está en un museo en la Tierra."
       },
       "photo": null,
-      "model": null
+      "models": []
     },
     {
       "id": "apollo-13-sivb",
@@ -417,7 +432,7 @@
         "es": "La tercera etapa del cohete del Apolo 13 chocó contra la Luna a propósito el 15 de abril de 1970, mientras la tripulación volvía a casa tras la explosión que canceló su alunizaje. El sismómetro que dejó el Apolo 12 registró a la Luna vibrando durante horas. Su cráter está en el Océano de las Tormentas."
       },
       "photo": null,
-      "model": null
+      "models": []
     },
     {
       "id": "luna-16",
@@ -450,7 +465,7 @@
         "es": "La etapa de descenso de la Luna 16 está en el Mar de la Fecundidad, donde aterrizó el 20 de septiembre de 1970. Un taladro sacó una muestra de suelo y la mitad superior de la nave la llevó a la Tierra: 101 gramos, la primera muestra lunar traída por un robot."
       },
       "photo": null,
-      "model": null
+      "models": []
     },
     {
       "id": "lunokhod-1",
@@ -491,7 +506,7 @@
         "es": "El Lunokhod 1, el primer vehículo robótico en otro mundo, está estacionado en el Mar de la Lluvia, donde la Luna 17 lo dejó el 17 de noviembre de 1970. Manejado por un equipo en la Unión Soviética, recorrió unos 10 kilómetros en diez meses. Estuvo perdido décadas hasta que una cámara en órbita lo encontró en 2010; hoy los observatorios vuelven a rebotar láseres en su reflector."
       },
       "photo": null,
-      "model": null
+      "models": []
     },
     {
       "id": "lunokhod-2",
@@ -532,7 +547,7 @@
         "es": "El Lunokhod 2 se detuvo dentro del cráter Le Monnier, a unos 180 kilómetros de donde había alunizado el Apolo 17 un mes antes de su llegada en enero de 1973. En cuatro meses recorrió unos 39 kilómetros, un récord para un vehículo en otro mundo que duró hasta 2014."
       },
       "photo": null,
-      "model": null
+      "models": []
     },
     {
       "id": "change-3",
@@ -569,7 +584,7 @@
         "es": "El módulo Chang'e 3 está en el Mar de la Lluvia, donde se posó el 14 de diciembre de 2013, el primer aterrizaje suave en la Luna en 37 años. Su vehículo, Yutu, recorrió unos 114 metros antes de quedarse sin poder avanzar, y está muy cerca."
       },
       "photo": null,
-      "model": null
+      "models": []
     }
   ]
 }

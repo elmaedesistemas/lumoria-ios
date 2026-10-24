@@ -21,6 +21,24 @@ final class MoonARController {
     func move() { coordinator?.startPlacing() }
     func placeInFront() { coordinator?.placeInFront() }
     func setSize(_ size: Float) { coordinator?.setSize(size) }
+    func setMeshVisible(_ visible: Bool) { coordinator?.setMeshVisible(visible) }
+}
+
+/// Shows or hides the LiDAR mesh of the room, the surfaces AR can place on.
+struct MeshToggleButton: View {
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Button { isOn.toggle() } label: {
+            Image(systemName: "square.grid.3x3")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(isOn ? Color.onSignal : Color.ink)
+                .frame(width: 44, height: 44)
+                .background(isOn ? Color.signal : Color.surface, in: Circle())
+        }
+        .accessibilityLabel(tr("Show the room's mesh", "Mostrar la malla del cuarto"))
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
 }
 
 /// The 3D Moon in an ARView.
@@ -29,6 +47,9 @@ final class MoonARController {
 /// the Moon is fixed there when you place it.
 struct MoonARView: UIViewRepresentable {
     enum Mode { case preview, table }
+
+    /// LiDAR devices build a mesh of the room, which can be shown and placed on.
+    static var hasLiDAR: Bool { ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) }
 
     let sites: [LandingSite]
     var mode: Mode
@@ -144,6 +165,8 @@ struct MoonARView: UIViewRepresentable {
             // LiDAR finds surfaces in a moment, even in dim rooms and on plain floors.
             if ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) {
                 config.sceneReconstruction = .mesh
+                // Make the LiDAR mesh hittable, so smooth tables ARKit can't see as planes still work.
+                arView.environment.sceneUnderstanding.options.insert(.collision)
             }
             // Light and reflect the model with the room around it.
             config.environmentTexturing = .automatic
@@ -202,18 +225,29 @@ struct MoonARView: UIViewRepresentable {
         // MARK: Placement
 
         /// While placing, the reticle and the Moon follow the surface under the screen center.
-        /// Where the screen point meets a horizontal surface: a detected plane if there is one,
-        /// else ARKit's estimate, else the floor plane extended past the part that's been scanned.
-        private func surfaceHit(at point: CGPoint, in arView: ARView) -> ARRaycastResult? {
+        /// Where the screen point meets a horizontal surface, and the ARKit plane it's on if any.
+        /// Tries a detected plane, then the LiDAR mesh (smooth, plain surfaces ARKit hasn't turned
+        /// into a plane yet), then ARKit's estimate, then the floor extended past what's been scanned.
+        private func surfaceHit(at point: CGPoint, in arView: ARView) -> (position: SIMD3<Float>, planeID: UUID?)? {
+            func position(_ hit: ARRaycastResult) -> SIMD3<Float> {
+                SIMD3(hit.worldTransform.columns.3.x, hit.worldTransform.columns.3.y, hit.worldTransform.columns.3.z)
+            }
             if let hit = arView.raycast(from: point, allowing: .existingPlaneGeometry, alignment: .horizontal).first {
-                return hit
+                return (position(hit), hit.anchor?.identifier)
+            }
+            if let ray = arView.ray(through: point),
+               let hit = arView.scene.raycast(origin: ray.origin, direction: ray.direction, length: 6,
+                                              query: .nearest, mask: .sceneUnderstanding).first,
+               hit.normal.y > 0.85 {
+                return (hit.position, nil)
             }
             if let hit = arView.raycast(from: point, allowing: .estimatedPlane, alignment: .horizontal).first {
-                return hit
+                return (position(hit), nil)
             }
-            guard let floorY else { return nil }
-            return arView.raycast(from: point, allowing: .existingPlaneInfinite, alignment: .horizontal)
-                .first { abs($0.worldTransform.columns.3.y - floorY) < 0.05 }
+            guard let floorY,
+                  let hit = arView.raycast(from: point, allowing: .existingPlaneInfinite, alignment: .horizontal)
+                    .first(where: { abs($0.worldTransform.columns.3.y - floorY) < 0.05 }) else { return nil }
+            return (position(hit), hit.anchor?.identifier)
         }
 
         private func updateShadow() {
@@ -235,14 +269,14 @@ struct MoonARView: UIViewRepresentable {
             guard let frame = arView.session.currentFrame, frame.camera.trackingState != .notAvailable else { return }
             let center = CGPoint(x: arView.bounds.midX, y: arView.bounds.midY)
             let hit = surfaceHit(at: center, in: arView)
-            targetPlaneID = hit?.anchor?.identifier
+            targetPlaneID = hit?.planeID
             guard let hit else {
                 reticle.isEnabled = false
                 scene.root.isEnabled = false
                 report(.searching)
                 return
             }
-            let point = SIMD3<Float>(hit.worldTransform.columns.3.x, hit.worldTransform.columns.3.y, hit.worldTransform.columns.3.z)
+            let point = hit.position
             reticle.position = point
             reticle.isEnabled = true
             endCoaching()
@@ -354,7 +388,10 @@ struct MoonARView: UIViewRepresentable {
             guard let arView, let parent else { return }
             let point = gesture.location(in: arView)
             // ARView's own hit test only knows the AR camera, not the preview's fixed one.
-            let hitID = arView.cameraMode == .ar ? arView.entity(at: point)?.name : previewPick(point, in: arView)
+            // In AR, skip the LiDAR mesh so the room never blocks a tap on a light.
+            let hitID = arView.cameraMode == .ar
+                ? arView.hitTest(point, query: .nearest, mask: CollisionGroup.all.subtracting(.sceneUnderstanding)).first?.entity.name
+                : previewPick(point, in: arView)
             if let site = parent.sites.first(where: { $0.id == hitID }) {
                 parent.onSelect(site)
             } else if placing {
@@ -471,6 +508,15 @@ struct MoonARView: UIViewRepresentable {
             guard new != status else { return }
             status = new
             Task { @MainActor [weak self] in self?.parent?.onStatus(new) }
+        }
+
+        func setMeshVisible(_ visible: Bool) {
+            guard let arView, arView.cameraMode == .ar else { return }
+            if visible {
+                arView.debugOptions.insert(.showSceneUnderstanding)
+            } else {
+                arView.debugOptions.remove(.showSceneUnderstanding)
+            }
         }
 
         // MARK: Plane paint

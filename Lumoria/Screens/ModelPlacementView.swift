@@ -10,6 +10,7 @@ struct ModelPlacementView: View {
     /// Size as a multiple of table size (1) up to real size.
     @State private var size: Float = 1
     @State private var ready = false
+    @State private var showMesh = false
 
     var body: some View {
         ZStack {
@@ -28,6 +29,10 @@ struct ModelPlacementView: View {
             VStack(spacing: 0) {
                 HStack {
                     CircleButton(systemName: "xmark", label: tr("Close", "Cerrar")) { dismiss() }
+                    if MoonARView.hasLiDAR {
+                        MeshToggleButton(isOn: $showMesh)
+                            .onChange(of: showMesh) { _, visible in controller.setMeshVisible(visible) }
+                    }
                     Spacer()
                     Text(site.mission)
                         .style(.label)

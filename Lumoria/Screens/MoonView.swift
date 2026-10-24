@@ -10,6 +10,7 @@ struct MoonView: View {
     @State private var status: MoonARStatus = .starting
     @State private var controller = MoonARController()
     @State private var showPlaceFallback = false
+    @State private var showMesh = false
 
     #if targetEnvironment(simulator)
     private let runsAR = false
@@ -62,6 +63,10 @@ struct MoonView: View {
     private var topBar: some View {
         HStack(spacing: Spacing.s2) {
             CircleButton(systemName: "chevron.left", label: tr("Back", "Atrás")) { dismiss() }
+            if runsAR && MoonARView.hasLiDAR {
+                MeshToggleButton(isOn: $showMesh)
+                    .onChange(of: showMesh) { _, visible in controller.setMeshVisible(visible) }
+            }
             Spacer()
             Text(statusText)
                 .style(.label)
